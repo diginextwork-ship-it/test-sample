@@ -318,13 +318,16 @@ router.post("/api/recruiters/:rid/resumes", async (req, res) => {
     }
 
     const hasJobJidColumn = await columnExists("resumes_data", "job_jid");
+    const hasApplicantNameColumn = await columnExists("resumes_data", "applicant_name");
     const hasAtsScoreColumn = await columnExists("resumes_data", "ats_score");
     const hasAtsMatchColumn = await columnExists("resumes_data", "ats_match_percentage");
     const hasAtsRawColumn = await columnExists("resumes_data", "ats_raw_json");
     const normalizedMimeType = String(resumeMimeType || "").trim().toLowerCase();
 
+    const shouldExtractResumeData =
+      hasApplicantNameColumn || hasAtsScoreColumn || hasAtsMatchColumn || hasAtsRawColumn;
     const resumeAts =
-      hasAtsScoreColumn || hasAtsMatchColumn || hasAtsRawColumn
+      shouldExtractResumeData
         ? await extractResumeAts({
           resumeBuffer,
           resumeFilename: normalizedFilename,
@@ -334,6 +337,7 @@ router.post("/api/recruiters/:rid/resumes", async (req, res) => {
             atsScore: null,
             atsMatchPercentage: null,
             atsRawJson: null,
+            applicantName: null,
             atsStatus: "not_stored",
           };
 
@@ -355,6 +359,11 @@ router.post("/api/recruiters/:rid/resumes", async (req, res) => {
 
       insertColumns.push("resume", "resume_filename", "resume_type");
       insertValues.push(resumeBuffer, normalizedFilename, extension);
+
+      if (hasApplicantNameColumn) {
+        insertColumns.push("applicant_name");
+        insertValues.push(resumeAts.applicantName || null);
+      }
 
       if (hasAtsScoreColumn) {
         insertColumns.push("ats_score");

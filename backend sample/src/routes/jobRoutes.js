@@ -5,6 +5,7 @@ const {
   getResumeExtension,
   decodeResumeBuffer,
   parseResumeWithAts,
+  extractApplicantName,
 } = require("../resumeparser/service");
 
 const router = express.Router();
@@ -423,6 +424,7 @@ router.post("/api/applications", async (req, res) => {
     const finalGradingSystem = String(gradingSystem || autofill.gradingSystem || "").trim();
     const finalScore = String(score ?? autofill.score ?? "").trim();
     const finalAge = toNumberOrNull(age ?? autofill.age);
+    const parsedApplicantName = extractApplicantName(parsed.parsedData) || finalName || null;
 
     if (
       !finalName ||
@@ -448,6 +450,7 @@ router.post("/api/applications", async (req, res) => {
     }
 
     const hasJobJidColumn = await columnExists("resumes_data", "job_jid");
+    const hasApplicantNameColumn = await columnExists("resumes_data", "applicant_name");
     const hasAtsScoreColumn = await columnExists("resumes_data", "ats_score");
     const hasAtsMatchColumn = await columnExists("resumes_data", "ats_match_percentage");
     const hasAtsRawColumn = await columnExists("resumes_data", "ats_raw_json");
@@ -518,6 +521,11 @@ router.post("/api/applications", async (req, res) => {
 
       insertColumns.push("resume", "resume_filename", "resume_type");
       insertValues.push(resumeBuffer, normalizedFilename, extension);
+
+      if (hasApplicantNameColumn) {
+        insertColumns.push("applicant_name");
+        insertValues.push(parsedApplicantName);
+      }
 
       if (hasAtsScoreColumn) {
         insertColumns.push("ats_score");
