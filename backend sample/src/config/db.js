@@ -35,6 +35,7 @@ const ensureResumesDataTable = async () => {
     `CREATE TABLE IF NOT EXISTS resumes_data (
       res_id VARCHAR(30) PRIMARY KEY,
       rid VARCHAR(20) NOT NULL,
+      applicant_name VARCHAR(255) NULL,
       job_jid INT NULL,
       resume LONGBLOB NOT NULL,
       resume_filename VARCHAR(255) NOT NULL,
@@ -59,6 +60,10 @@ const ensureResumesDataTable = async () => {
 
   if (!(await columnExists("resumes_data", "job_jid"))) {
     await pool.query("ALTER TABLE resumes_data ADD COLUMN job_jid INT NULL");
+  }
+
+  if (!(await columnExists("resumes_data", "applicant_name"))) {
+    await pool.query("ALTER TABLE resumes_data ADD COLUMN applicant_name VARCHAR(255) NULL");
   }
 
   if (!(await columnExists("resumes_data", "ats_score"))) {
