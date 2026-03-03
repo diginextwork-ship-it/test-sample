@@ -320,6 +320,12 @@ const ensureMoneySumTable = async () => {
     );
   }
 
+  if (!(await columnExists("money_sum", "id"))) {
+    await pool.query(
+      "ALTER TABLE money_sum ADD COLUMN id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST"
+    );
+  }
+
   if (!(await indexExists("money_sum", "idx_money_sum_created_at"))) {
     await pool.query("CREATE INDEX idx_money_sum_created_at ON money_sum (created_at)");
   }

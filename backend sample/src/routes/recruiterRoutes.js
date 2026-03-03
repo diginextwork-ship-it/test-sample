@@ -1,6 +1,12 @@
 const express = require("express");
 const pool = require("../config/db");
 const { extractResumeAts } = require("../resumeparser/service");
+const {
+  createAuthToken,
+  requireAuth,
+  requireRoles,
+  requireRecruiterOwner,
+} = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -102,7 +108,7 @@ const getRecruiterSummary = async (rid) => {
 };
 
 
-router.post("/api/recruiters", async (req, res) => {
+router.post("/api/recruiters", requireAuth, requireRoles("admin"), async (req, res) => {
   const { name, email, password, role } = req.body || {};
 
   if (!name || !email || !password) {
@@ -255,8 +261,16 @@ router.post("/api/recruiters/login", async (req, res) => {
     const recruiter = rows[0];
     const recruiterRole = normalizeRecruiterRole(recruiter.role, recruiter.addjob);
 
-    return res.status(200).json({ 
+    const token = createAuthToken({
+      role: recruiterRole,
+      rid: recruiter.rid,
+      email: recruiter.email,
+      name: recruiter.name,
+    });
+
+    return res.status(200).json({
       message: "Login successful.",
+      token,
       recruiter: {
         rid: recruiter.rid,
         name: recruiter.name,
@@ -273,7 +287,12 @@ router.post("/api/recruiters/login", async (req, res) => {
   }
 });
 
-router.post("/api/recruiters/:rid/resumes", async (req, res) => {
+router.post(
+  "/api/recruiters/:rid/resumes",
+  requireAuth,
+  requireRoles("recruiter"),
+  requireRecruiterOwner,
+  async (req, res) => {
   const { rid } = req.params;
   const { job_jid, resumeBase64, resumeFilename, resumeMimeType } = req.body || {};
 
@@ -454,9 +473,15 @@ router.post("/api/recruiters/:rid/resumes", async (req, res) => {
       error: error.message,
     });
   }
-});
+  }
+);
 
-router.get("/api/recruiters/:rid/resumes", async (req, res) => {
+router.get(
+  "/api/recruiters/:rid/resumes",
+  requireAuth,
+  requireRoles("recruiter"),
+  requireRecruiterOwner,
+  async (req, res) => {
   const { rid } = req.params;
 
   try {
@@ -497,9 +522,15 @@ router.get("/api/recruiters/:rid/resumes", async (req, res) => {
       error: error.message,
     });
   }
-});
+  }
+);
 
-router.get("/api/recruiters/:rid/resumes/:resId/file", async (req, res) => {
+router.get(
+  "/api/recruiters/:rid/resumes/:resId/file",
+  requireAuth,
+  requireRoles("recruiter"),
+  requireRecruiterOwner,
+  async (req, res) => {
   const { rid, resId } = req.params;
 
   try {
@@ -539,9 +570,15 @@ router.get("/api/recruiters/:rid/resumes/:resId/file", async (req, res) => {
       error: error.message,
     });
   }
-});
+  }
+);
 
-router.get("/api/recruiters/:rid/dashboard", async (req, res) => {
+router.get(
+  "/api/recruiters/:rid/dashboard",
+  requireAuth,
+  requireRoles("recruiter"),
+  requireRecruiterOwner,
+  async (req, res) => {
   const { rid } = req.params;
 
   try {
@@ -565,9 +602,15 @@ router.get("/api/recruiters/:rid/dashboard", async (req, res) => {
       error: error.message,
     });
   }
-});
+  }
+);
 
-router.post("/api/recruiters/:rid/candidate-click", async (req, res) => {
+router.post(
+  "/api/recruiters/:rid/candidate-click",
+  requireAuth,
+  requireRoles("recruiter"),
+  requireRecruiterOwner,
+  async (req, res) => {
   const { rid } = req.params;
   const { candidateName } = req.body || {};
 
@@ -608,9 +651,15 @@ router.post("/api/recruiters/:rid/candidate-click", async (req, res) => {
       error: error.message,
     });
   }
-});
+  }
+);
 
-router.get("/api/recruiters/:rid/applications", async (req, res) => {
+router.get(
+  "/api/recruiters/:rid/applications",
+  requireAuth,
+  requireRoles("recruiter", "job creator", "job adder"),
+  requireRecruiterOwner,
+  async (req, res) => {
   const { rid } = req.params;
 
   try {
@@ -664,7 +713,8 @@ router.get("/api/recruiters/:rid/applications", async (req, res) => {
       error: error.message,
     });
   }
-});
+  }
+);
 
 module.exports = router;
 

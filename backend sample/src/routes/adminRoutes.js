@@ -1,5 +1,6 @@
 const express = require("express");
 const pool = require("../config/db");
+const { createAuthToken, requireAuth, requireRoles } = require("../middleware/auth");
 
 const router = express.Router();
 const ADMIN_API_KEY = String(process.env.ADMIN_API_KEY || "admin123");
@@ -35,9 +36,57 @@ const columnExists = async (tableName, columnName) => {
   return rows.length > 0;
 };
 
+const ensureMoneySumTable = async () => {
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS money_sum (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      company_rev DECIMAL(14,2) NOT NULL DEFAULT 0,
+      expense DECIMAL(14,2) NOT NULL DEFAULT 0,
+      profit DECIMAL(14,2) NOT NULL DEFAULT 0,
+      reason TEXT NULL,
+      entry_type VARCHAR(20) NOT NULL DEFAULT 'expense',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`
+  );
+
+  if (!(await columnExists("money_sum", "company_rev"))) {
+    await pool.query("ALTER TABLE money_sum ADD COLUMN company_rev DECIMAL(14,2) NOT NULL DEFAULT 0");
+  }
+  if (!(await columnExists("money_sum", "expense"))) {
+    await pool.query("ALTER TABLE money_sum ADD COLUMN expense DECIMAL(14,2) NOT NULL DEFAULT 0");
+  }
+  if (!(await columnExists("money_sum", "profit"))) {
+    await pool.query("ALTER TABLE money_sum ADD COLUMN profit DECIMAL(14,2) NOT NULL DEFAULT 0");
+  }
+  if (!(await columnExists("money_sum", "reason"))) {
+    await pool.query("ALTER TABLE money_sum ADD COLUMN reason TEXT NULL");
+  }
+  if (!(await columnExists("money_sum", "entry_type"))) {
+    await pool.query(
+      "ALTER TABLE money_sum ADD COLUMN entry_type VARCHAR(20) NOT NULL DEFAULT 'expense'"
+    );
+  }
+  if (!(await columnExists("money_sum", "created_at"))) {
+    await pool.query(
+      "ALTER TABLE money_sum ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+    );
+  }
+  if (!(await columnExists("money_sum", "updated_at"))) {
+    await pool.query(
+      "ALTER TABLE money_sum ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+    );
+  }
+
+  if (!(await columnExists("money_sum", "id"))) {
+    await pool.query(
+      "ALTER TABLE money_sum ADD COLUMN id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST"
+    );
+  }
+};
+
 const isAdminAuthorized = (req) => {
-  const providedKey = String(req.headers["x-admin-key"] || "").trim();
-  return Boolean(providedKey) && providedKey === ADMIN_API_KEY;
+  return String(req.auth?.role || "").trim().toLowerCase() === "admin";
 };
 
 const ensureAdminAuthorized = (req, res) => {
@@ -83,6 +132,22 @@ const recomputeMoneyProfit = async (connection) => {
     await connection.query("UPDATE money_sum SET profit = ? WHERE id = ?", [runningProfit, row.id]);
   }
 };
+
+router.post("/api/admin/login", (req, res) => {
+  const providedKey = String(req.body?.adminKey || "").trim();
+  if (!providedKey || providedKey !== ADMIN_API_KEY) {
+    return res.status(401).json({ message: "Invalid admin credentials." });
+  }
+
+  const token = createAuthToken({ role: "admin", name: "Admin" });
+  return res.status(200).json({
+    message: "Admin login successful.",
+    token,
+    admin: { role: "admin", name: "Admin" },
+  });
+});
+
+router.use("/api/admin", requireAuth, requireRoles("admin"));
 
 router.get("/api/admin/dashboard", async (_req, res) => {
   try {
@@ -698,6 +763,8 @@ router.get("/api/admin/revenue", async (req, res) => {
   if (!ensureAdminAuthorized(req, res)) return;
 
   try {
+    await ensureMoneySumTable();
+
     const hasMoneySumTable = await tableExists("money_sum");
     if (!hasMoneySumTable) {
       return res.status(200).json({
@@ -781,6 +848,8 @@ router.get("/api/admin/revenue", async (req, res) => {
 router.post("/api/admin/revenue/entries", async (req, res) => {
   if (!ensureAdminAuthorized(req, res)) return;
 
+  await ensureMoneySumTable();
+
   const entryType = normalizeRevenueEntryType(req.body?.entryType);
   const amount = toPositiveMoney(req.body?.amount);
   const reason = String(req.body?.reason || "").trim();
@@ -799,6 +868,7 @@ router.post("/api/admin/revenue/entries", async (req, res) => {
 
   const companyRev = entryType === "intake" ? amount : 0;
   const expense = entryType === "expense" ? amount : 0;
+  const safeReason = reason || "";
 
   const connection = await pool.getConnection();
   try {
@@ -814,7 +884,7 @@ router.post("/api/admin/revenue/entries", async (req, res) => {
       `INSERT INTO money_sum
         (company_rev, expense, profit, reason, entry_type)
        VALUES (?, ?, ?, ?, ?)`,
-      [companyRev, expense, nextProfit, reason || null, entryType]
+      [companyRev, expense, nextProfit, safeReason, entryType]
     );
 
     const [entryRows] = await connection.query(
@@ -860,6 +930,8 @@ router.post("/api/admin/revenue/entries", async (req, res) => {
 
 router.delete("/api/admin/revenue/entries/:id", async (req, res) => {
   if (!ensureAdminAuthorized(req, res)) return;
+
+  await ensureMoneySumTable();
 
   const entryId = Number(req.params.id);
   if (!Number.isInteger(entryId) || entryId <= 0) {

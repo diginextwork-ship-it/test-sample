@@ -7,6 +7,7 @@ const {
   parseResumeWithAts,
   extractApplicantName,
 } = require("../resumeparser/service");
+const { requireAuth, requireRoles } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -221,7 +222,11 @@ router.get("/api/jobs", async (_req, res) => {
   }
 });
 
-router.post("/api/jobs", async (req, res) => {
+router.post(
+  "/api/jobs",
+  requireAuth,
+  requireRoles("job creator", "job adder", "recruiter"),
+  async (req, res) => {
   const {
     recruiter_rid,
     city,
@@ -265,6 +270,13 @@ router.post("/api/jobs", async (req, res) => {
     return res.status(400).json({
       message:
         "recruiter_rid, company_name, and role_name are required.",
+    });
+  }
+
+  const authRid = String(req.auth?.rid || "").trim();
+  if (!authRid || authRid !== String(recruiter_rid).trim()) {
+    return res.status(403).json({
+      message: "You can only create jobs for your own recruiter ID.",
     });
   }
 
@@ -426,7 +438,8 @@ router.post("/api/jobs", async (req, res) => {
       error: error.message,
     });
   }
-});
+  }
+);
 
 router.post("/api/applications/parse-resume", async (req, res) => {
   try {
