@@ -27,6 +27,27 @@ const toNumberOrNull = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const toPositiveIntOrNull = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+
+const toNonNegativeIntOrNull = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) return null;
+  return parsed;
+};
+
+const toNonNegativeNumberOrNull = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
+};
+
 const safeJsonOrNull = (value) => {
   if (value === undefined || value === null) return null;
   return JSON.stringify(value);
@@ -151,12 +172,16 @@ router.get("/api/jobs", async (_req, res) => {
         pincode,
         company_name,
         role_name,
+        positions_open,
+        revenue,
+        points_per_joining,
         skills,
         job_description,
         experience,
         salary,
         qualification,
-        benefits
+        benefits,
+        created_at
       FROM jobs
       ORDER BY jid DESC`
     );
@@ -178,6 +203,9 @@ router.post("/api/jobs", async (req, res) => {
     pincode,
     company_name,
     role_name,
+    positions_open,
+    revenue,
+    points_per_joining,
     skills,
     job_description,
     experience,
@@ -186,10 +214,22 @@ router.post("/api/jobs", async (req, res) => {
     benefits,
   } = req.body || {};
 
-  if (!recruiter_rid || !city || !state || !pincode || !company_name || !role_name) {
+  const safePositionsOpen = toPositiveIntOrNull(positions_open);
+  const safeRevenue = toNonNegativeNumberOrNull(revenue);
+  const safePointsPerJoining = toNonNegativeIntOrNull(points_per_joining);
+
+  if (
+    !recruiter_rid ||
+    !company_name ||
+    !role_name ||
+    !job_description ||
+    safePositionsOpen === null ||
+    safeRevenue === null ||
+    safePointsPerJoining === null
+  ) {
     return res.status(400).json({
       message:
-        "recruiter_rid, city, state, pincode, company_name, and role_name are required.",
+        "recruiter_rid, company_name, role_name, job_description, positions_open, revenue, and points_per_joining are required.",
     });
   }
 
@@ -224,15 +264,18 @@ router.post("/api/jobs", async (req, res) => {
 
     const [result] = await pool.query(
       `INSERT INTO jobs
-        (recruiter_rid, city, state, pincode, company_name, role_name, skills, job_description, experience, salary, qualification, benefits)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (recruiter_rid, city, state, pincode, company_name, role_name, positions_open, revenue, points_per_joining, skills, job_description, experience, salary, qualification, benefits)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         recruiter_rid.trim(),
-        city.trim(),
-        state.trim(),
-        pincode.trim(),
+        String(city || "N/A").trim() || "N/A",
+        String(state || "N/A").trim() || "N/A",
+        String(pincode || "N/A").trim() || "N/A",
         company_name.trim(),
         role_name.trim(),
+        safePositionsOpen,
+        safeRevenue,
+        safePointsPerJoining,
         skills?.trim() || null,
         job_description?.trim() || null,
         experience?.trim() || null,
@@ -252,6 +295,9 @@ router.post("/api/jobs", async (req, res) => {
         pincode: pincode.trim(),
         company_name: company_name.trim(),
         role_name: role_name.trim(),
+        positions_open: safePositionsOpen,
+        revenue: safeRevenue,
+        points_per_joining: safePointsPerJoining,
       },
     });
   } catch (error) {
@@ -450,6 +496,7 @@ router.post("/api/applications", async (req, res) => {
     }
 
     const hasJobJidColumn = await columnExists("resumes_data", "job_jid");
+    const hasSubmittedByRoleColumn = await columnExists("resumes_data", "submitted_by_role");
     const hasApplicantNameColumn = await columnExists("resumes_data", "applicant_name");
     const hasAtsScoreColumn = await columnExists("resumes_data", "ats_score");
     const hasAtsMatchColumn = await columnExists("resumes_data", "ats_match_percentage");
@@ -521,6 +568,11 @@ router.post("/api/applications", async (req, res) => {
 
       insertColumns.push("resume", "resume_filename", "resume_type");
       insertValues.push(resumeBuffer, normalizedFilename, extension);
+
+      if (hasSubmittedByRoleColumn) {
+        insertColumns.push("submitted_by_role");
+        insertValues.push("candidate");
+      }
 
       if (hasApplicantNameColumn) {
         insertColumns.push("applicant_name");

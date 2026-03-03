@@ -378,17 +378,7 @@ async function calculateAtsScore(resumeData, jobDescription) {
     return cleanJsonText(text);
   } catch (error) {
     console.error("Error calculating ATS score with Gemini:", error.message);
-
-    return JSON.stringify({
-      ats_score: 0,
-      match_percentage: "0%",
-      matching_keywords: [],
-      missing_keywords: [],
-      strengths: [],
-      weaknesses: [],
-      recommendations: [],
-      overall_assessment: `Error calculating score: ${error.message}`,
-    });
+    return null;
   }
 }
 

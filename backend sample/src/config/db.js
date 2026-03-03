@@ -93,9 +93,31 @@ const ensureJobsTableColumns = async () => {
     );
   }
 
+  if (!(await columnExists("jobs", "revenue"))) {
+    await pool.query("ALTER TABLE jobs ADD COLUMN revenue DECIMAL(12,2) NULL");
+  }
+
+  if (!(await columnExists("jobs", "points_per_joining"))) {
+    await pool.query(
+      "ALTER TABLE jobs ADD COLUMN points_per_joining INT NOT NULL DEFAULT 0"
+    );
+  }
+
   if (!(await indexExists("jobs", "idx_jobs_created_at"))) {
     await pool.query("CREATE INDEX idx_jobs_created_at ON jobs (created_at)");
   }
+};
+
+const ensureRecruiterTableColumns = async () => {
+  if (!(await tableExists("recruiter"))) return;
+
+  if (!(await columnExists("recruiter", "points"))) {
+    await pool.query("ALTER TABLE recruiter ADD COLUMN points INT NOT NULL DEFAULT 0");
+    return;
+  }
+
+  await pool.query("UPDATE recruiter SET points = 0 WHERE points IS NULL");
+  await pool.query("ALTER TABLE recruiter MODIFY COLUMN points INT NOT NULL DEFAULT 0");
 };
 
 const ensureResumesDataTable = async () => {
@@ -152,6 +174,20 @@ const ensureResumesDataTable = async () => {
     await pool.query(
       "ALTER TABLE resumes_data ADD COLUMN submitted_by_role VARCHAR(30) NULL DEFAULT 'recruiter'"
     );
+  }
+
+  if (!(await columnExists("resumes_data", "is_accepted"))) {
+    await pool.query(
+      "ALTER TABLE resumes_data ADD COLUMN is_accepted BOOLEAN NOT NULL DEFAULT FALSE"
+    );
+  }
+
+  if (!(await columnExists("resumes_data", "accepted_at"))) {
+    await pool.query("ALTER TABLE resumes_data ADD COLUMN accepted_at TIMESTAMP NULL DEFAULT NULL");
+  }
+
+  if (!(await columnExists("resumes_data", "accepted_by_admin"))) {
+    await pool.query("ALTER TABLE resumes_data ADD COLUMN accepted_by_admin VARCHAR(50) NULL");
   }
 };
 
@@ -230,6 +266,7 @@ const ensureJobResumeSelectionTable = async () => {
 
 const initDatabase = async () => {
   await ensureResumeIdSequenceTable();
+  await ensureRecruiterTableColumns();
   await ensureJobsTableColumns();
   await ensureResumesDataTable();
   await ensureApplicationColumns();

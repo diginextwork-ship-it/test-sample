@@ -49,7 +49,9 @@ const normalizeRecruiterRole = (value, addjobValue) => {
 
 const getRecruiterSummary = async (rid) => {
   const hasSuccessColumn = await columnExists("recruiter", "success");
+  const hasPointsColumn = await columnExists("recruiter", "points");
   let success = 0;
+  let points = 0;
   let thisMonth = 0;
   let monthlyTrend = [];
 
@@ -61,11 +63,19 @@ const getRecruiterSummary = async (rid) => {
     success = Number(rows?.[0]?.success) || 0;
   }
 
+  if (hasPointsColumn) {
+    const [rows] = await pool.query(
+      "SELECT COALESCE(points, 0) AS points FROM recruiter WHERE rid = ? LIMIT 1",
+      [rid]
+    );
+    points = Number(rows?.[0]?.points) || 0;
+  }
+
   const hasClicksTable = await tableExists("recruiter_candidate_clicks");
   if (hasClicksTable) {
     const recruiterIdColumn = await getRecruiterIdColumn("recruiter_candidate_clicks");
     if (!recruiterIdColumn) {
-      return { success, thisMonth, monthlyTrend };
+      return { success, points, thisMonth, monthlyTrend };
     }
 
     const [trendRows] = await pool.query(
@@ -86,7 +96,7 @@ const getRecruiterSummary = async (rid) => {
     thisMonth = monthlyTrend.reduce((sum, row) => sum + row.clicks, 0);
   }
 
-  return { success, thisMonth, monthlyTrend };
+  return { success, points, thisMonth, monthlyTrend };
 };
 
 
@@ -100,13 +110,12 @@ router.post("/api/recruiters", async (req, res) => {
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const gmailMatch = normalizedEmail.match(/^([a-z0-9._%+-]+)@gmail\.com$/i);
-  if (!gmailMatch) {
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailPattern.test(normalizedEmail)) {
     return res.status(400).json({
-      message: "Email must be a valid @gmail.com address.",
+      message: "Email must be a valid email address.",
     });
   }
-  const gmailLocalPart = gmailMatch[1].toLowerCase();
 
   const connection = await pool.getConnection();
   try {
@@ -115,15 +124,14 @@ router.post("/api/recruiters", async (req, res) => {
     const [existing] = await connection.query(
       `SELECT rid
        FROM recruiter
-       WHERE LOWER(SUBSTRING_INDEX(email, '@', 1)) = ?
-         AND LOWER(SUBSTRING_INDEX(email, '@', -1)) = 'gmail.com'
+       WHERE LOWER(email) = ?
        LIMIT 1`,
-      [gmailLocalPart]
+      [normalizedEmail]
     );
     if (existing.length > 0) {
       await connection.rollback();
       return res.status(409).json({
-        message: "Recruiter identity already exists before @gmail.com.",
+        message: "Recruiter email already exists.",
       });
     }
 
@@ -147,21 +155,42 @@ router.post("/api/recruiters", async (req, res) => {
     const canAddJob = normalizedRole === "job creator";
     const hasRoleColumn = await columnExists("recruiter", "role");
     const hasAddJobColumn = await columnExists("recruiter", "addjob");
+    const hasPointsColumn = await columnExists("recruiter", "points");
 
-    if (hasRoleColumn && hasAddJobColumn) {
+    if (hasRoleColumn && hasAddJobColumn && hasPointsColumn) {
+      await connection.query(
+        "INSERT INTO recruiter (rid, name, email, password, role, addjob, points) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [rid, name.trim(), normalizedEmail, password, normalizedRole, canAddJob, 0]
+      );
+    } else if (hasRoleColumn && hasAddJobColumn) {
       await connection.query(
         "INSERT INTO recruiter (rid, name, email, password, role, addjob) VALUES (?, ?, ?, ?, ?, ?)",
         [rid, name.trim(), normalizedEmail, password, normalizedRole, canAddJob]
+      );
+    } else if (hasRoleColumn && hasPointsColumn) {
+      await connection.query(
+        "INSERT INTO recruiter (rid, name, email, password, role, points) VALUES (?, ?, ?, ?, ?, ?)",
+        [rid, name.trim(), normalizedEmail, password, normalizedRole, 0]
       );
     } else if (hasRoleColumn) {
       await connection.query(
         "INSERT INTO recruiter (rid, name, email, password, role) VALUES (?, ?, ?, ?, ?)",
         [rid, name.trim(), normalizedEmail, password, normalizedRole]
       );
+    } else if (hasAddJobColumn && hasPointsColumn) {
+      await connection.query(
+        "INSERT INTO recruiter (rid, name, email, password, addjob, points) VALUES (?, ?, ?, ?, ?, ?)",
+        [rid, name.trim(), normalizedEmail, password, canAddJob, 0]
+      );
     } else if (hasAddJobColumn) {
       await connection.query(
         "INSERT INTO recruiter (rid, name, email, password, addjob) VALUES (?, ?, ?, ?, ?)",
         [rid, name.trim(), normalizedEmail, password, canAddJob]
+      );
+    } else if (hasPointsColumn) {
+      await connection.query(
+        "INSERT INTO recruiter (rid, name, email, password, points) VALUES (?, ?, ?, ?, ?)",
+        [rid, name.trim(), normalizedEmail, password, 0]
       );
     } else {
       await connection.query(
@@ -322,6 +351,7 @@ router.post("/api/recruiters/:rid/resumes", async (req, res) => {
     const hasAtsScoreColumn = await columnExists("resumes_data", "ats_score");
     const hasAtsMatchColumn = await columnExists("resumes_data", "ats_match_percentage");
     const hasAtsRawColumn = await columnExists("resumes_data", "ats_raw_json");
+    const hasSubmittedByRoleColumn = await columnExists("resumes_data", "submitted_by_role");
     const normalizedMimeType = String(resumeMimeType || "").trim().toLowerCase();
 
     const shouldExtractResumeData =
@@ -359,6 +389,11 @@ router.post("/api/recruiters/:rid/resumes", async (req, res) => {
 
       insertColumns.push("resume", "resume_filename", "resume_type");
       insertValues.push(resumeBuffer, normalizedFilename, extension);
+
+      if (hasSubmittedByRoleColumn) {
+        insertColumns.push("submitted_by_role");
+        insertValues.push("recruiter");
+      }
 
       if (hasApplicantNameColumn) {
         insertColumns.push("applicant_name");
@@ -517,6 +552,7 @@ router.get("/api/recruiters/:rid/dashboard", async (req, res) => {
     return res.status(200).json({
       summary: {
         success: summary.success,
+        points: summary.points,
         thisMonth: summary.thisMonth,
       },
       monthlyTrend: summary.monthlyTrend,
@@ -560,6 +596,7 @@ router.post("/api/recruiters/:rid/candidate-click", async (req, res) => {
       message: "Candidate completion updated.",
       summary: {
         success: summary.success,
+        points: summary.points,
         thisMonth: summary.thisMonth,
       },
     });
