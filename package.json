@@ -1,0 +1,11 @@
+{
+  "name": "hirenext-monorepo",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm --prefix \"frontend sample\" ci && npm --prefix \"frontend sample\" run build && npm --prefix \"backend sample\" ci",
+    "start": "npm --prefix \"backend sample\" start"
+  }
+}
