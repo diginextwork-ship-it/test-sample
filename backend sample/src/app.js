@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 const healthRoutes = require("./routes/healthRoutes");
 const recruiterRoutes = require("./routes/recruiterRoutes");
 const jobRoutes = require("./routes/jobRoutes");
@@ -15,7 +16,14 @@ app.use(recruiterRoutes);
 app.use(jobRoutes);
 app.use(adminRoutes);
 
-app.use((_req, res) => {
+const frontendDistPath = path.resolve(__dirname, "../../frontend sample/dist");
+app.use(express.static(frontendDistPath));
+
+app.get(/^\/(?!api).*/, (_req, res) => {
+  res.sendFile(path.join(frontendDistPath, "index.html"));
+});
+
+app.use("/api", (_req, res) => {
   res.status(404).json({ message: "Route not found." });
 });
 
