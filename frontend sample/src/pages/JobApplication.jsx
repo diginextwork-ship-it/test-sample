@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import "../styles/job-application.css";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
 const initialFormData = {
   name: "",
@@ -116,7 +116,7 @@ export default function JobApplication({ setCurrentPage }) {
     } catch (error) {
       if (error instanceof TypeError) {
         setResumeMessageType("error");
-        setResumeMessage("Cannot connect to backend. Ensure API is running on port 5000.");
+        setResumeMessage("Cannot connect to backend. Ensure API is running on port 8080.");
       } else {
         setResumeMessageType("error");
         setResumeMessage(error.message || "Resume parsing failed.");
@@ -221,7 +221,7 @@ export default function JobApplication({ setCurrentPage }) {
       setResumeMessageType("");
     } catch (error) {
       if (error instanceof TypeError) {
-        setSubmitMessage("Cannot connect to backend. Ensure API is running on port 5000.");
+        setSubmitMessage("Cannot connect to backend. Ensure API is running on port 8080.");
       } else {
         setSubmitMessage(error.message || "Application submission failed.");
       }

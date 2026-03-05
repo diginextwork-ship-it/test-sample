@@ -11,7 +11,7 @@ import {
 import "../styles/recruiter-login.css";
 import { clearAuthSession, getAuthSession, saveAuthSession } from "../auth/session";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
 const formatTrendDate = (dateValue) => {
   if (!dateValue) return "";
@@ -226,7 +226,7 @@ export default function RecruiterLogin() {
       setPassword("");
     } catch (error) {
       if (error instanceof TypeError) {
-        alert("Cannot connect to backend. Ensure API is running on port 5000.");
+        alert("Cannot connect to backend. Ensure API is running on port 8080.");
         return;
       }
       alert("Unable to login right now. Please try again.");
@@ -315,7 +315,7 @@ export default function RecruiterLogin() {
     } catch (error) {
       if (error instanceof TypeError) {
         setDashboardMessageType("error");
-        setDashboardMessage("Cannot connect to backend. Ensure API is running on port 5000.");
+        setDashboardMessage("Cannot connect to backend. Ensure API is running on port 8080.");
         return;
       }
       setDashboardMessageType("error");
@@ -417,7 +417,7 @@ export default function RecruiterLogin() {
     } catch (error) {
       if (error instanceof TypeError) {
         setJobMessageType("error");
-        setJobMessage("Cannot connect to backend. Ensure API is running on port 5000.");
+        setJobMessage("Cannot connect to backend. Ensure API is running on port 8080.");
         return;
       }
       setJobMessageType("error");
@@ -472,7 +472,7 @@ export default function RecruiterLogin() {
     } catch (error) {
       if (error instanceof TypeError) {
         setResumeMessageType("error");
-        setResumeMessage("Cannot connect to backend. Ensure API is running on port 5000.");
+        setResumeMessage("Cannot connect to backend. Ensure API is running on port 8080.");
         return;
       }
       setResumeMessageType("error");
