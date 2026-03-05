@@ -1,7 +1,47 @@
 import { useEffect, useMemo, useState } from "react";
 import "../styles/job-search.css";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const DEFAULT_API_BASE_URL = "http://localhost:5000";
+
+const normalizeApiBaseUrl = (rawBaseUrl) => {
+  const trimmed = (rawBaseUrl || "").trim();
+  if (!trimmed) return DEFAULT_API_BASE_URL;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed.replace(/\/+$/, "");
+  if (trimmed.startsWith("//")) return `https:${trimmed}`.replace(/\/+$/, "");
+  return `https://${trimmed}`.replace(/\/+$/, "");
+};
+
+const buildApiUrl = (rawBaseUrl, endpointPath) => {
+  const baseUrl = new URL(normalizeApiBaseUrl(rawBaseUrl));
+  const basePath = (baseUrl.pathname || "").replace(/\/+$/, "");
+  const normalizedEndpointPath = endpointPath.startsWith("/")
+    ? endpointPath
+    : `/${endpointPath}`;
+  const endpointPathWithoutDuplicateApi =
+    basePath.endsWith("/api") && normalizedEndpointPath.startsWith("/api/")
+      ? normalizedEndpointPath.slice(4)
+      : normalizedEndpointPath;
+
+  baseUrl.pathname = `${basePath}${endpointPathWithoutDuplicateApi}`.replace(
+    /\/{2,}/g,
+    "/"
+  );
+
+  return baseUrl.toString();
+};
+
+const readJsonResponse = async (response, fallbackMessage) => {
+  const rawBody = await response.text();
+  if (!rawBody) return {};
+
+  try {
+    return JSON.parse(rawBody);
+  } catch {
+    throw new Error(
+      `Jobs API returned non-JSON response (${response.status}) from ${response.url}. ${fallbackMessage}`
+    );
+  }
+};
 
 const toUiJob = (job) => {
   const city = job.city?.trim() || "";
@@ -42,21 +82,16 @@ export default function JobSearch({ setCurrentPage }) {
       setLoadError("");
 
       try {
-        const jobsUrl = `${API_BASE_URL}/api/jobs`;
+        const jobsUrl = buildApiUrl(import.meta.env.VITE_API_BASE_URL, "/api/jobs");
         const response = await fetch(jobsUrl, {
           headers: {
             Accept: "application/json",
           },
         });
-        const contentType = response.headers.get("content-type") || "";
-
-        if (!contentType.toLowerCase().includes("application/json")) {
-          throw new Error(
-            `Jobs API returned non-JSON response from ${jobsUrl}. Check VITE_API_BASE_URL and ensure backend is restarted with GET /api/jobs route.`
-          );
-        }
-
-        const data = await response.json();
+        const data = await readJsonResponse(
+          response,
+          "Check VITE_API_BASE_URL and ensure backend is restarted with GET /api/jobs route."
+        );
 
         if (!response.ok) {
           throw new Error(data?.message || "Failed to fetch jobs.");
