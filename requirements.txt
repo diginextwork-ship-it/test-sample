@@ -1,2 +1,0 @@
-# This repository deploys as Node.js services (backend + frontend build).
-# Python runtime is not required for the current implementation.
