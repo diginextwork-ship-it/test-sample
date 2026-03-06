@@ -8,14 +8,43 @@ const adminRoutes = require("./routes/adminRoutes");
 
 const app = express();
 
-app.use(cors());
+// CORS Configuration - CRITICAL FOR PRODUCTION
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:5174", // Vite sometimes uses this
+  process.env.FRONTEND_URL, // Will be set in Railway
+].filter(Boolean); // Remove undefined values
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`⚠ Blocked CORS request from: ${origin}`);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true, // Allow cookies/auth headers
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
+
 app.use(express.json({ limit: "25mb" }));
 
+// Routes
 app.use(healthRoutes);
 app.use(recruiterRoutes);
 app.use(jobRoutes);
 app.use(adminRoutes);
 
+// Static file serving (ONLY if deploying as single service - NOT RECOMMENDED)
+// Comment out these lines if deploying frontend separately on Vercel
 const frontendDistPath = path.resolve(__dirname, "../../frontend sample/dist");
 app.use(express.static(frontendDistPath));
 
@@ -23,15 +52,26 @@ app.get(/^\/(?!api).*/, (_req, res) => {
   res.sendFile(path.join(frontendDistPath, "index.html"));
 });
 
+// 404 handler for API routes
 app.use("/api", (_req, res) => {
   res.status(404).json({ message: "Route not found." });
 });
 
+// Global error handler
 app.use((err, _req, res, _next) => {
-  console.error(err);
-  res.status(err.status || 500).json({
-    message: err.message || "Internal server error.",
-  });
+  console.error("Error:", err);
+
+  // Don't expose internal errors in production
+  if (process.env.NODE_ENV === "production") {
+    res.status(err.status || 500).json({
+      message: err.status === 404 ? err.message : "Internal server error.",
+    });
+  } else {
+    res.status(err.status || 500).json({
+      message: err.message || "Internal server error.",
+      stack: err.stack, // Only in development
+    });
+  }
 });
 
 module.exports = app;
