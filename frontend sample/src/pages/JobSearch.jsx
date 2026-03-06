@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import "../styles/job-search.css";
 
 const DEFAULT_API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  DEFAULT_API_BASE_URL;
 
 const normalizeApiBaseUrl = (rawBaseUrl) => {
   const trimmed = (rawBaseUrl || "").trim();
@@ -82,7 +86,7 @@ export default function JobSearch({ setCurrentPage }) {
       setLoadError("");
 
       try {
-        const jobsUrl = buildApiUrl(import.meta.env.VITE_API_BASE_URL, "/api/jobs");
+        const jobsUrl = buildApiUrl(API_BASE_URL, "/api/jobs");
         const response = await fetch(jobsUrl, {
           headers: {
             Accept: "application/json",
