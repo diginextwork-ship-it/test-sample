@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "../styles/job-search.css";
 
-const DEFAULT_API_BASE_URL = "http://localhost:8080";
+const DEFAULT_API_BASE_URL = "http://localhost:5000";
 
 const normalizeApiBaseUrl = (rawBaseUrl) => {
   const trimmed = (rawBaseUrl || "").trim();
@@ -102,7 +102,7 @@ export default function JobSearch({ setCurrentPage }) {
         setSelectedJobId(mappedJobs[0]?.id ?? null);
       } catch (error) {
         if (error instanceof TypeError) {
-          setLoadError("Cannot connect to backend. Ensure API is running on port 8080.");
+          setLoadError("Cannot connect to backend. Ensure API is running on port 5000.");
         } else {
           setLoadError(error.message || "Unable to load jobs right now.");
         }
