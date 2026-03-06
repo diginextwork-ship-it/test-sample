@@ -4,7 +4,7 @@ import "../styles/job-application.css";
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
-  "http://localhost:5000";
+  "https://test-sample-production-ee50.up.railway.app/";
 
 const initialFormData = {
   name: "",
@@ -431,3 +431,4 @@ export default function JobApplication({ setCurrentPage }) {
     </main>
   );
 }
+

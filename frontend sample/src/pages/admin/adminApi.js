@@ -2,7 +2,7 @@ import { getAuthToken } from "../../auth/session";
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
-  "http://localhost:5000";
+  "https://test-sample-production-ee50.up.railway.app/";
 
 export const getAdminHeaders = (extraHeaders = {}) => ({
   Authorization: `Bearer ${getAuthToken()}`,
@@ -21,3 +21,4 @@ export const readJsonResponse = async (response, fallbackMessage) => {
     );
   }
 };
+

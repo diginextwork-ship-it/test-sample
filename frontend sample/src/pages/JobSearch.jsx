@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "../styles/job-search.css";
 
-const DEFAULT_API_BASE_URL = "http://localhost:5000";
+const DEFAULT_API_BASE_URL = "https://test-sample-production-ee50.up.railway.app/";
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
@@ -272,3 +272,4 @@ export default function JobSearch({ setCurrentPage }) {
     </main>
   );
 }
+
