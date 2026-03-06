@@ -13,8 +13,15 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:5174", // Vite sometimes uses this
-  process.env.FRONTEND_URL, // Will be set in Railway
+  process.env.FRONTEND_URL, // Single frontend URL
+  ...String(process.env.FRONTEND_URLS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean), // Comma-separated URLs for multiple deployments
 ].filter(Boolean); // Remove undefined values
+
+const allowVercelPreviews =
+  String(process.env.ALLOW_VERCEL_PREVIEWS || "false").toLowerCase() === "true";
 
 app.use(
   cors({
@@ -22,7 +29,17 @@ app.use(
       // Allow requests with no origin (mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
 
-      if (allowedOrigins.includes(origin)) {
+      let isAllowed = allowedOrigins.includes(origin);
+      if (!isAllowed && allowVercelPreviews) {
+        try {
+          const hostname = new URL(origin).hostname.toLowerCase();
+          isAllowed = hostname.endsWith(".vercel.app");
+        } catch (_error) {
+          isAllowed = false;
+        }
+      }
+
+      if (isAllowed) {
         callback(null, true);
       } else {
         console.warn(`⚠ Blocked CORS request from: ${origin}`);

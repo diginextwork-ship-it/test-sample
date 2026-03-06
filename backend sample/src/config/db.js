@@ -1,5 +1,26 @@
 const mysql = require("mysql2/promise");
 
+const parseBooleanEnv = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes";
+};
+
+const resolveSslConfig = (host) => {
+  const explicitSsl = process.env.DB_SSL ?? process.env.MYSQL_SSL;
+  const useSsl = explicitSsl != null ? parseBooleanEnv(explicitSsl) : /aivencloud\.com$/i.test(host);
+  if (!useSsl) return undefined;
+
+  const rawCa = String(process.env.DB_SSL_CA || process.env.AIVEN_CA_CERT || "").trim();
+  if (!rawCa) {
+    return { rejectUnauthorized: true };
+  }
+
+  return {
+    ca: rawCa.replace(/\\n/g, "\n"),
+    rejectUnauthorized: true,
+  };
+};
+
 const getDbConfig = () => {
   const connectionUrl = String(
     process.env.DATABASE_URL || process.env.MYSQL_URL || process.env.JAWSDB_URL || ""
@@ -7,12 +28,14 @@ const getDbConfig = () => {
 
   if (connectionUrl) {
     const parsedUrl = new URL(connectionUrl);
+    const host = parsedUrl.hostname;
     return {
-      host: parsedUrl.hostname,
+      host,
       port: parsedUrl.port ? Number(parsedUrl.port) : 3306,
       user: decodeURIComponent(parsedUrl.username || ""),
       password: decodeURIComponent(parsedUrl.password || ""),
       database: decodeURIComponent(String(parsedUrl.pathname || "").replace(/^\//, "")),
+      ssl: resolveSslConfig(host),
     };
   }
 
@@ -24,12 +47,14 @@ const getDbConfig = () => {
     );
   }
 
+  const host = process.env.DB_HOST;
   return {
-    host: process.env.DB_HOST,
+    host,
     port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
+    ssl: resolveSslConfig(host),
   };
 };
 
