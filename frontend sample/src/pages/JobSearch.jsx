@@ -106,7 +106,7 @@ export default function JobSearch({ setCurrentPage }) {
         setSelectedJobId(mappedJobs[0]?.id ?? null);
       } catch (error) {
         if (error instanceof TypeError) {
-          setLoadError("Cannot connect to backend. Ensure API is running on port 5000.");
+          setLoadError("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
         } else {
           setLoadError(error.message || "Unable to load jobs right now.");
         }

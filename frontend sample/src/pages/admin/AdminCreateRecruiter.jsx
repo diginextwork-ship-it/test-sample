@@ -43,7 +43,7 @@ export default function AdminCreateRecruiter({ setCurrentPage }) {
     } catch (error) {
       if (error instanceof TypeError) {
         setMessageType("error");
-        setMessage("Cannot connect to backend. Ensure API is running on port 5000.");
+        setMessage("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
         return;
       }
       setMessageType("error");

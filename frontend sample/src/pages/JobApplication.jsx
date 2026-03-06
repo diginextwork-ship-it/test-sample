@@ -119,7 +119,7 @@ export default function JobApplication({ setCurrentPage }) {
     } catch (error) {
       if (error instanceof TypeError) {
         setResumeMessageType("error");
-        setResumeMessage("Cannot connect to backend. Ensure API is running on port 5000.");
+        setResumeMessage("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
       } else {
         setResumeMessageType("error");
         setResumeMessage(error.message || "Resume parsing failed.");
@@ -224,7 +224,7 @@ export default function JobApplication({ setCurrentPage }) {
       setResumeMessageType("");
     } catch (error) {
       if (error instanceof TypeError) {
-        setSubmitMessage("Cannot connect to backend. Ensure API is running on port 5000.");
+        setSubmitMessage("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
       } else {
         setSubmitMessage(error.message || "Application submission failed.");
       }

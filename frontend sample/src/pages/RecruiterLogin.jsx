@@ -229,7 +229,7 @@ export default function RecruiterLogin() {
       setPassword("");
     } catch (error) {
       if (error instanceof TypeError) {
-        alert("Cannot connect to backend. Ensure API is running on port 5000.");
+        alert("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
         return;
       }
       alert("Unable to login right now. Please try again.");
@@ -318,7 +318,7 @@ export default function RecruiterLogin() {
     } catch (error) {
       if (error instanceof TypeError) {
         setDashboardMessageType("error");
-        setDashboardMessage("Cannot connect to backend. Ensure API is running on port 5000.");
+        setDashboardMessage("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
         return;
       }
       setDashboardMessageType("error");
@@ -420,7 +420,7 @@ export default function RecruiterLogin() {
     } catch (error) {
       if (error instanceof TypeError) {
         setJobMessageType("error");
-        setJobMessage("Cannot connect to backend. Ensure API is running on port 5000.");
+        setJobMessage("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
         return;
       }
       setJobMessageType("error");
@@ -475,7 +475,7 @@ export default function RecruiterLogin() {
     } catch (error) {
       if (error instanceof TypeError) {
         setResumeMessageType("error");
-        setResumeMessage("Cannot connect to backend. Ensure API is running on port 5000.");
+        setResumeMessage("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
         return;
       }
       setResumeMessageType("error");
