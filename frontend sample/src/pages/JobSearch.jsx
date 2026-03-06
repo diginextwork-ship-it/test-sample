@@ -1,38 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import "../styles/job-search.css";
-
-const DEFAULT_API_BASE_URL = "https://test-sample-production-ee50.up.railway.app/";
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  DEFAULT_API_BASE_URL;
-
-const normalizeApiBaseUrl = (rawBaseUrl) => {
-  const trimmed = (rawBaseUrl || "").trim();
-  if (!trimmed) return DEFAULT_API_BASE_URL;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed.replace(/\/+$/, "");
-  if (trimmed.startsWith("//")) return `https:${trimmed}`.replace(/\/+$/, "");
-  return `https://${trimmed}`.replace(/\/+$/, "");
-};
-
-const buildApiUrl = (rawBaseUrl, endpointPath) => {
-  const baseUrl = new URL(normalizeApiBaseUrl(rawBaseUrl));
-  const basePath = (baseUrl.pathname || "").replace(/\/+$/, "");
-  const normalizedEndpointPath = endpointPath.startsWith("/")
-    ? endpointPath
-    : `/${endpointPath}`;
-  const endpointPathWithoutDuplicateApi =
-    basePath.endsWith("/api") && normalizedEndpointPath.startsWith("/api/")
-      ? normalizedEndpointPath.slice(4)
-      : normalizedEndpointPath;
-
-  baseUrl.pathname = `${basePath}${endpointPathWithoutDuplicateApi}`.replace(
-    /\/{2,}/g,
-    "/"
-  );
-
-  return baseUrl.toString();
-};
+import {
+  BACKEND_CONNECTION_ERROR,
+  buildApiUrl,
+} from "../config/api";
 
 const readJsonResponse = async (response, fallbackMessage) => {
   const rawBody = await response.text();
@@ -86,7 +57,7 @@ export default function JobSearch({ setCurrentPage }) {
       setLoadError("");
 
       try {
-        const jobsUrl = buildApiUrl(API_BASE_URL, "/api/jobs");
+        const jobsUrl = buildApiUrl("/api/jobs");
         const response = await fetch(jobsUrl, {
           headers: {
             Accept: "application/json",
@@ -106,7 +77,7 @@ export default function JobSearch({ setCurrentPage }) {
         setSelectedJobId(mappedJobs[0]?.id ?? null);
       } catch (error) {
         if (error instanceof TypeError) {
-          setLoadError("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
+          setLoadError(BACKEND_CONNECTION_ERROR);
         } else {
           setLoadError(error.message || "Unable to load jobs right now.");
         }

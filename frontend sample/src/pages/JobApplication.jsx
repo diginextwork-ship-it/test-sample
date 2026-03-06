@@ -1,10 +1,6 @@
 import { useMemo, useState } from "react";
 import "../styles/job-application.css";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  "https://test-sample-production-ee50.up.railway.app/";
+import { API_BASE_URL, BACKEND_CONNECTION_ERROR } from "../config/api";
 
 const initialFormData = {
   name: "",
@@ -119,7 +115,7 @@ export default function JobApplication({ setCurrentPage }) {
     } catch (error) {
       if (error instanceof TypeError) {
         setResumeMessageType("error");
-        setResumeMessage("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
+        setResumeMessage(BACKEND_CONNECTION_ERROR);
       } else {
         setResumeMessageType("error");
         setResumeMessage(error.message || "Resume parsing failed.");
@@ -224,7 +220,7 @@ export default function JobApplication({ setCurrentPage }) {
       setResumeMessageType("");
     } catch (error) {
       if (error instanceof TypeError) {
-        setSubmitMessage("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
+        setSubmitMessage(BACKEND_CONNECTION_ERROR);
       } else {
         setSubmitMessage(error.message || "Application submission failed.");
       }

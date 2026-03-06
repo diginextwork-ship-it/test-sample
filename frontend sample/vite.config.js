@@ -7,12 +7,10 @@ const allowedHosts = ['delightful-kindness-production-0c72.up.railway.app']
 export default defineConfig({
   plugins: [react()],
   server: {
+    port: 5173,
     allowedHosts,
   },
   preview: {
     allowedHosts,
   },
-  server: {
-    port: 5173,
-  }
 })

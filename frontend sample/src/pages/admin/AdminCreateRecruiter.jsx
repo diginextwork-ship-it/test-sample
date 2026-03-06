@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AdminLayout from "./AdminLayout";
 import { API_BASE_URL, getAdminHeaders, readJsonResponse } from "./adminApi";
+import { BACKEND_CONNECTION_ERROR } from "../../config/api";
 import "../../styles/admin-panel.css";
 
 export default function AdminCreateRecruiter({ setCurrentPage }) {
@@ -43,7 +44,7 @@ export default function AdminCreateRecruiter({ setCurrentPage }) {
     } catch (error) {
       if (error instanceof TypeError) {
         setMessageType("error");
-        setMessage("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
+        setMessage(BACKEND_CONNECTION_ERROR);
         return;
       }
       setMessageType("error");

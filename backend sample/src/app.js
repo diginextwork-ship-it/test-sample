@@ -1,6 +1,5 @@
 const express = require("express");
 const cors = require("cors");
-const path = require("path");
 const healthRoutes = require("./routes/healthRoutes");
 const recruiterRoutes = require("./routes/recruiterRoutes");
 const jobRoutes = require("./routes/jobRoutes");
@@ -59,15 +58,6 @@ app.use(healthRoutes);
 app.use(recruiterRoutes);
 app.use(jobRoutes);
 app.use(adminRoutes);
-
-// Static file serving (ONLY if deploying as single service - NOT RECOMMENDED)
-// Comment out these lines if deploying frontend separately on Vercel
-const frontendDistPath = path.resolve(__dirname, "../../frontend sample/dist");
-app.use(express.static(frontendDistPath));
-
-app.get(/^\/(?!api).*/, (_req, res) => {
-  res.sendFile(path.join(frontendDistPath, "index.html"));
-});
 
 // 404 handler for API routes
 app.use("/api", (_req, res) => {

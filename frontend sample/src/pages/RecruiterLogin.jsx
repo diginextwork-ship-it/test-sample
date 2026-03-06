@@ -10,11 +10,7 @@ import {
 } from "recharts";
 import "../styles/recruiter-login.css";
 import { clearAuthSession, getAuthSession, saveAuthSession } from "../auth/session";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  "https://test-sample-production-ee50.up.railway.app/";
+import { API_BASE_URL, BACKEND_CONNECTION_ERROR } from "../config/api";
 
 const formatTrendDate = (dateValue) => {
   if (!dateValue) return "";
@@ -229,7 +225,7 @@ export default function RecruiterLogin() {
       setPassword("");
     } catch (error) {
       if (error instanceof TypeError) {
-        alert("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
+        alert(BACKEND_CONNECTION_ERROR);
         return;
       }
       alert("Unable to login right now. Please try again.");
@@ -318,7 +314,7 @@ export default function RecruiterLogin() {
     } catch (error) {
       if (error instanceof TypeError) {
         setDashboardMessageType("error");
-        setDashboardMessage("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
+        setDashboardMessage(BACKEND_CONNECTION_ERROR);
         return;
       }
       setDashboardMessageType("error");
@@ -420,7 +416,7 @@ export default function RecruiterLogin() {
     } catch (error) {
       if (error instanceof TypeError) {
         setJobMessageType("error");
-        setJobMessage("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
+        setJobMessage(BACKEND_CONNECTION_ERROR);
         return;
       }
       setJobMessageType("error");
@@ -475,7 +471,7 @@ export default function RecruiterLogin() {
     } catch (error) {
       if (error instanceof TypeError) {
         setResumeMessageType("error");
-        setResumeMessage("Cannot connect to backend. Ensure API is running at https://test-sample-production-ee50.up.railway.app/.");
+        setResumeMessage(BACKEND_CONNECTION_ERROR);
         return;
       }
       setResumeMessageType("error");

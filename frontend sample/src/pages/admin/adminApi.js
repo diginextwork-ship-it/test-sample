@@ -1,8 +1,7 @@
 import { getAuthToken } from "../../auth/session";
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  "https://test-sample-production-ee50.up.railway.app/";
+import { API_BASE_URL } from "../../config/api";
+
+export { API_BASE_URL };
 
 export const getAdminHeaders = (extraHeaders = {}) => ({
   Authorization: `Bearer ${getAuthToken()}`,
