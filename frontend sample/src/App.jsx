@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import Home from "./pages/Home";
+import AboutUs from "./pages/AboutUs";
 import Contact from "./pages/contact";
 import JobSearch from "./pages/JobSearch";
 import JobApplication from "./pages/JobApplication";
@@ -24,6 +25,7 @@ const PAGE_TO_PATH = {
   jobs: "/jobs",
   applyjob: "/jobs/apply",
   contactus: "/contactus",
+  aboutus: "/about-us",
   schedulecall: "/schedule-call",
   recruiterlogin: "/recruiter-login",
   adminlogin: "/admin-login",
@@ -62,6 +64,7 @@ const getPageFromPath = (pathname) => {
   if (normalizedPath === "/jobs") return "jobs";
   if (normalizedPath === "/jobs/apply") return "applyjob";
   if (normalizedPath === "/contactus") return "contactus";
+  if (normalizedPath === "/about-us") return "aboutus";
   if (normalizedPath === "/schedule-call") return "schedulecall";
   if (normalizedPath === "/recruiter-login") return "recruiterlogin";
   if (normalizedPath === "/admin-login") return "adminlogin";
@@ -130,6 +133,8 @@ export default function App() {
     switch (guardedPage) {
       case "contactus":
         return <Contact setCurrentPage={setCurrentPage} />;
+      case "aboutus":
+        return <AboutUs />;
       case "jobs":
         return <JobSearch setCurrentPage={setCurrentPage} />;
       case "applyjob":

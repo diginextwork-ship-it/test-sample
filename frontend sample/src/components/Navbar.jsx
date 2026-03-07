@@ -45,7 +45,14 @@ export default function Navbar({ setCurrentPage, currentPage }) {
               Search all jobs
             </a>
 
-            <a href="#" className="nav-link">
+            <a
+              href="/about-us"
+              className="nav-link"
+              onClick={(e) => {
+                e.preventDefault();
+                handleNavClick("aboutus");
+              }}
+            >
               About Us
             </a>
 
