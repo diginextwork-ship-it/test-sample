@@ -49,8 +49,11 @@ const getRecruiterIdColumn = async (tableName) => {
 
 const normalizeRecruiterRole = (value, addjobValue) => {
   const normalized = String(value || "").trim().toLowerCase();
-  if (normalized === "job creator" || normalized === "job adder" || normalized === "recruiter") {
-    return normalized;
+  if (normalized === "job creator" || normalized === "job adder" || normalized === "job_adder") {
+    return "job adder";
+  }
+  if (normalized === "recruiter") {
+    return "recruiter";
   }
   return Boolean(addjobValue) ? "job adder" : "recruiter";
 };
@@ -152,15 +155,18 @@ router.post("/api/recruiters", requireAuth, requireRoles("admin"), async (req, r
     const rid = `hnr-${nextNumber}`;
 
     const normalizedRole = String(role || "recruiter").trim().toLowerCase();
-    const allowedRoles = new Set(["job creator", "job adder", "recruiter"]);
+    const allowedRoles = new Set(["job creator", "job adder", "job_adder", "recruiter"]);
     if (!allowedRoles.has(normalizedRole)) {
       await connection.rollback();
       return res.status(400).json({
-        message: "role must be one of 'job creator', 'job adder', or 'recruiter'.",
+        message: "role must be one of 'job creator', 'job adder', 'job_adder', or 'recruiter'.",
       });
     }
 
-    const canAddJob = normalizedRole === "job creator" || normalizedRole === "job adder";
+    const canAddJob =
+      normalizedRole === "job creator" ||
+      normalizedRole === "job adder" ||
+      normalizedRole === "job_adder";
     const hasRoleColumn = await columnExists("recruiter", "role");
     const hasAddJobColumn = await columnExists("recruiter", "addjob");
     const hasPointsColumn = await columnExists("recruiter", "points");
@@ -286,6 +292,53 @@ router.post("/api/recruiters/login", async (req, res) => {
     });
   }
 });
+
+router.get(
+  "/api/recruiters/list",
+  requireAuth,
+  requireRoles("job adder", "job_adder"),
+  async (req, res) => {
+    const rawSearch = String(req.query?.search || "").trim();
+    const safeLike = `%${rawSearch.replace(/[%_]/g, "\\$&")}%`;
+
+    try {
+      const hasPointsColumn = await columnExists("recruiter", "points");
+      const hasRoleColumn = await columnExists("recruiter", "role");
+      const pointsSelect = hasPointsColumn ? "COALESCE(points, 0)" : "0";
+      const roleFilter = hasRoleColumn ? "AND LOWER(TRIM(role)) = 'recruiter'" : "";
+
+      const query = rawSearch
+        ? `SELECT rid, name, email, ${pointsSelect} AS points
+           FROM recruiter
+           WHERE 1 = 1
+             ${roleFilter}
+             AND (name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' OR rid LIKE ? ESCAPE '\\')
+           ORDER BY name ASC, rid ASC`
+        : `SELECT rid, name, email, ${pointsSelect} AS points
+           FROM recruiter
+           WHERE 1 = 1
+             ${roleFilter}
+           ORDER BY name ASC, rid ASC`;
+
+      const params = rawSearch ? [safeLike, safeLike, safeLike] : [];
+      const [rows] = await pool.query(query, params);
+
+      return res.status(200).json({
+        recruiters: rows.map((row) => ({
+          rid: row.rid,
+          name: row.name,
+          email: row.email,
+          points: Number(row.points) || 0,
+        })),
+      });
+    } catch (error) {
+      return res.status(500).json({
+        message: "Failed to fetch recruiters list.",
+        error: error.message,
+      });
+    }
+  }
+);
 
 router.post(
   "/api/recruiters/:rid/resumes",

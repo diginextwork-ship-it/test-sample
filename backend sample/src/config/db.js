@@ -450,6 +450,59 @@ const ensureMoneySumTable = async () => {
   }
 };
 
+const ensureJobAccessControlSchema = async () => {
+  if (await tableExists("jobs")) {
+    if (!(await columnExists("jobs", "access_mode"))) {
+      await pool.query(
+        "ALTER TABLE jobs ADD COLUMN access_mode ENUM('open','restricted') NOT NULL DEFAULT 'open' AFTER role_name",
+      );
+    }
+
+    await pool.query(
+      "UPDATE jobs SET access_mode = 'open' WHERE access_mode IS NULL OR TRIM(access_mode) = ''",
+    );
+  }
+
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS job_recruiter_access (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      job_jid INT UNSIGNED NOT NULL,
+      recruiter_rid VARCHAR(20) NOT NULL,
+      granted_by VARCHAR(20) NOT NULL,
+      granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      notes TEXT NULL,
+      UNIQUE KEY uniq_job_recruiter_access (job_jid, recruiter_rid),
+      INDEX idx_job_recruiter_access_job_active (job_jid, is_active),
+      INDEX idx_job_recruiter_access_recruiter_active (recruiter_rid, is_active),
+      CONSTRAINT fk_job_recruiter_access_job
+        FOREIGN KEY (job_jid) REFERENCES jobs(jid)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+      CONSTRAINT fk_job_recruiter_access_recruiter
+        FOREIGN KEY (recruiter_rid) REFERENCES recruiter(rid)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+      CONSTRAINT fk_job_recruiter_access_granted_by
+        FOREIGN KEY (granted_by) REFERENCES recruiter(rid)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE
+    )`,
+  );
+
+  if (!(await columnExists("job_recruiter_access", "is_active"))) {
+    await pool.query(
+      "ALTER TABLE job_recruiter_access ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE",
+    );
+  }
+
+  if (!(await columnExists("job_recruiter_access", "notes"))) {
+    await pool.query(
+      "ALTER TABLE job_recruiter_access ADD COLUMN notes TEXT NULL",
+    );
+  }
+};
+
 const initDatabase = async () => {
   await ensureResumeIdSequenceTable();
   await ensureRecruiterTableColumns();
@@ -458,6 +511,7 @@ const initDatabase = async () => {
   await ensureApplicationColumns();
   await ensureJobResumeSelectionTable();
   await ensureMoneySumTable();
+  await ensureJobAccessControlSchema();
 };
 
 pool.initDatabase = initDatabase;

@@ -45,6 +45,8 @@ ALTER TABLE jobs
   ADD COLUMN IF NOT EXISTS revenue DECIMAL(12,2) NULL;
 ALTER TABLE jobs
   ADD COLUMN IF NOT EXISTS points_per_joining INT NOT NULL DEFAULT 0;
+ALTER TABLE jobs
+  ADD COLUMN IF NOT EXISTS access_mode ENUM('open', 'restricted') NOT NULL DEFAULT 'open';
 
 ALTER TABLE recruiter
   ADD COLUMN IF NOT EXISTS points INT NOT NULL DEFAULT 0;
@@ -151,4 +153,26 @@ CREATE TABLE IF NOT EXISTS money_sum (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_money_sum_created_at (created_at),
   INDEX idx_money_sum_entry_type (entry_type)
+);
+
+CREATE TABLE IF NOT EXISTS job_recruiter_access (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  job_jid INT UNSIGNED NOT NULL,
+  recruiter_rid VARCHAR(20) NOT NULL,
+  granted_by VARCHAR(20) NOT NULL,
+  granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  notes TEXT NULL,
+  UNIQUE KEY uniq_job_recruiter_access (job_jid, recruiter_rid),
+  INDEX idx_job_recruiter_access_job_active (job_jid, is_active),
+  INDEX idx_job_recruiter_access_recruiter_active (recruiter_rid, is_active),
+  CONSTRAINT fk_job_recruiter_access_job
+    FOREIGN KEY (job_jid) REFERENCES jobs(jid)
+    ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_job_recruiter_access_recruiter
+    FOREIGN KEY (recruiter_rid) REFERENCES recruiter(rid)
+    ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_job_recruiter_access_granted_by
+    FOREIGN KEY (granted_by) REFERENCES recruiter(rid)
+    ON UPDATE CASCADE ON DELETE RESTRICT
 );

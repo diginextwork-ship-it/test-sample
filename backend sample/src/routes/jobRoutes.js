@@ -175,6 +175,109 @@ const buildJobAtsContext = (jobRow) => {
   return parts.filter((line) => !line.endsWith(":")).join("\n");
 };
 
+const toTrimmedString = (value) => String(value || "").trim();
+
+const normalizeAccessMode = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "open" || normalized === "restricted") {
+    return normalized;
+  }
+  return "";
+};
+
+const dedupeStringList = (values) => {
+  const unique = new Set();
+  const result = [];
+  for (const raw of Array.isArray(values) ? values : []) {
+    const normalized = String(raw || "").trim();
+    if (!normalized || unique.has(normalized)) continue;
+    unique.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+};
+
+const getActiveAccessCount = async (jobId) => {
+  const [rows] = await pool.query(
+    `SELECT COUNT(*) AS total
+     FROM job_recruiter_access
+     WHERE job_jid = ? AND is_active = TRUE`,
+    [jobId]
+  );
+  return Number(rows?.[0]?.total) || 0;
+};
+
+const requireOwnedJob = async (req, res, next) => {
+  const safeJobId = Number(req.params.jid);
+  if (!Number.isInteger(safeJobId) || safeJobId <= 0) {
+    return res.status(400).json({ message: "jid must be a positive integer." });
+  }
+
+  try {
+    const hasAccessModeColumn = await columnExists("jobs", "access_mode");
+    const [rows] = await pool.query(
+      `SELECT
+        jid,
+        recruiter_rid AS recruiterRid,
+        ${hasAccessModeColumn ? "access_mode" : "'open'"} AS accessMode
+      FROM jobs
+      WHERE jid = ?
+      LIMIT 1`,
+      [safeJobId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Job not found." });
+    }
+
+    const authRid = toTrimmedString(req.auth?.rid);
+    if (!authRid || toTrimmedString(rows[0].recruiterRid) !== authRid) {
+      return res.status(403).json({ message: "You can only manage access for your own jobs." });
+    }
+
+    req.ownedJob = {
+      jid: safeJobId,
+      recruiterRid: toTrimmedString(rows[0].recruiterRid),
+      accessMode: normalizeAccessMode(rows[0].accessMode) || "open",
+    };
+    return next();
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to validate job ownership.",
+      error: error.message,
+    });
+  }
+};
+
+const validateRecruiterIds = async (recruiterIds) => {
+  const uniqueRecruiterIds = dedupeStringList(recruiterIds);
+  if (uniqueRecruiterIds.length === 0) {
+    return { validRecruiterIds: [], invalidRecruiterIds: [] };
+  }
+
+  const hasRoleColumn = await columnExists("recruiter", "role");
+  const [rows] = hasRoleColumn
+    ? await pool.query(
+        `SELECT rid
+         FROM recruiter
+         WHERE rid IN (?) AND LOWER(TRIM(role)) = 'recruiter'`,
+        [uniqueRecruiterIds]
+      )
+    : await pool.query(
+        `SELECT rid
+         FROM recruiter
+         WHERE rid IN (?)`,
+        [uniqueRecruiterIds]
+      );
+
+  const validRecruiterSet = new Set(rows.map((row) => String(row.rid)));
+  const invalidRecruiterIds = uniqueRecruiterIds.filter((rid) => !validRecruiterSet.has(rid));
+  return {
+    validRecruiterIds: uniqueRecruiterIds.filter((rid) => validRecruiterSet.has(rid)),
+    invalidRecruiterIds,
+  };
+};
+
 router.get("/api/jobs", async (_req, res) => {
   try {
     const hasCityColumn = await columnExists("jobs", "city");
@@ -189,6 +292,7 @@ router.get("/api/jobs", async (_req, res) => {
     const hasQualificationColumn = await columnExists("jobs", "qualification");
     const hasBenefitsColumn = await columnExists("jobs", "benefits");
     const hasCreatedAtColumn = await columnExists("jobs", "created_at");
+    const hasAccessModeColumn = await columnExists("jobs", "access_mode");
 
     const [rows] = await pool.query(
       `SELECT
@@ -208,7 +312,8 @@ router.get("/api/jobs", async (_req, res) => {
         ${hasSalaryColumn ? "salary" : "NULL AS salary"},
         ${hasQualificationColumn ? "qualification" : "NULL AS qualification"},
         ${hasBenefitsColumn ? "benefits" : "NULL AS benefits"},
-        ${hasCreatedAtColumn ? "created_at" : "NULL AS created_at"}
+        ${hasCreatedAtColumn ? "created_at" : "NULL AS created_at"},
+        ${hasAccessModeColumn ? "access_mode" : "'open' AS access_mode"}
       FROM jobs
       ORDER BY jid DESC`
     );
@@ -225,7 +330,7 @@ router.get("/api/jobs", async (_req, res) => {
 router.post(
   "/api/jobs",
   requireAuth,
-  requireRoles("job creator", "job adder", "recruiter"),
+  requireRoles("job creator", "job adder", "job_adder", "recruiter"),
   async (req, res) => {
   const {
     recruiter_rid,
@@ -243,11 +348,17 @@ router.post(
     salary,
     qualification,
     benefits,
+    access_mode,
+    recruiterIds,
+    accessNotes,
   } = req.body || {};
 
   const safePositionsOpen = toPositiveIntOrNull(positions_open);
   const safeRevenue = toNonNegativeNumberOrNull(revenue);
   const safePointsPerJoining = toNonNegativeIntOrNull(points_per_joining);
+  const normalizedAccessMode = normalizeAccessMode(access_mode || "open") || "open";
+  const requestedRecruiterIds = dedupeStringList(recruiterIds);
+  const normalizedAccessNotes = toTrimmedString(accessNotes) || null;
 
   const hasCityColumn = await columnExists("jobs", "city");
   const hasStateColumn = await columnExists("jobs", "state");
@@ -261,6 +372,7 @@ router.post(
   const hasPositionsOpenColumn = await columnExists("jobs", "positions_open");
   const hasRevenueColumn = await columnExists("jobs", "revenue");
   const hasPointsPerJoiningColumn = await columnExists("jobs", "points_per_joining");
+  const hasAccessModeColumn = await columnExists("jobs", "access_mode");
 
   if (
     !recruiter_rid ||
@@ -277,6 +389,12 @@ router.post(
   if (!authRid || authRid !== String(recruiter_rid).trim()) {
     return res.status(403).json({
       message: "You can only create jobs for your own recruiter ID.",
+    });
+  }
+
+  if (access_mode !== undefined && !normalizeAccessMode(access_mode)) {
+    return res.status(400).json({
+      message: "access_mode must be either 'open' or 'restricted'.",
     });
   }
 
@@ -341,11 +459,22 @@ router.post(
     const canCreateJobs = hasRoleColumn
       ? recruiterRole === "job creator" ||
         recruiterRole === "job adder" ||
+        recruiterRole === "job_adder" ||
         Boolean(recruiters[0].addjob)
       : Boolean(recruiters[0].addjob);
 
     if (!canCreateJobs) {
       return res.status(403).json({ message: "Only job creator/job adder can add jobs." });
+    }
+
+    const { validRecruiterIds, invalidRecruiterIds } = await validateRecruiterIds(
+      requestedRecruiterIds
+    );
+    if (invalidRecruiterIds.length > 0) {
+      return res.status(400).json({
+        message: "Some recruiterIds are invalid or not recruiter role users.",
+        invalidRecruiterIds,
+      });
     }
 
     const insertColumns = ["recruiter_rid", "company_name", "role_name"];
@@ -399,32 +528,71 @@ router.post(
       insertColumns.push("benefits");
       insertValues.push(benefits?.trim() || null);
     }
+    if (hasAccessModeColumn) {
+      insertColumns.push("access_mode");
+      insertValues.push(normalizedAccessMode);
+    }
 
-    const placeholders = insertColumns.map(() => "?").join(", ");
-    const [result] = await pool.query(
-      `INSERT INTO jobs (${insertColumns.join(", ")}) VALUES (${placeholders})`,
-      insertValues
-    );
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
 
-    const safeCity = String(city || "").trim();
-    const safeState = String(state || "").trim();
-    const safePincode = String(pincode || "").trim();
+      const placeholders = insertColumns.map(() => "?").join(", ");
+      const [result] = await connection.query(
+        `INSERT INTO jobs (${insertColumns.join(", ")}) VALUES (${placeholders})`,
+        insertValues
+      );
 
-    return res.status(201).json({
-      message: "Job created successfully.",
-      job: {
-        jid: result.insertId,
-        recruiter_rid: recruiter_rid.trim(),
-        city: safeCity,
-        state: safeState,
-        pincode: safePincode,
-        company_name: company_name.trim(),
-        role_name: role_name.trim(),
-        positions_open: safePositionsOpen,
-        revenue: safeRevenue,
-        points_per_joining: safePointsPerJoining,
-      },
-    });
+      if (normalizedAccessMode === "restricted" && validRecruiterIds.length > 0) {
+        for (const recruiterId of validRecruiterIds) {
+          await connection.query(
+            `INSERT INTO job_recruiter_access
+              (job_jid, recruiter_rid, granted_by, notes, is_active)
+             VALUES (?, ?, ?, ?, TRUE)
+             ON DUPLICATE KEY UPDATE
+               is_active = TRUE,
+               granted_by = VALUES(granted_by),
+               granted_at = CURRENT_TIMESTAMP,
+               notes = VALUES(notes)`,
+            [result.insertId, recruiterId, authRid, normalizedAccessNotes]
+          );
+        }
+      }
+
+      await connection.commit();
+
+      const safeCity = String(city || "").trim();
+      const safeState = String(state || "").trim();
+      const safePincode = String(pincode || "").trim();
+      const warning =
+        normalizedAccessMode === "restricted" && validRecruiterIds.length === 0
+          ? "Job is restricted but no recruiters are assigned yet."
+          : null;
+
+      return res.status(201).json({
+        message: "Job created successfully.",
+        warning,
+        job: {
+          jid: result.insertId,
+          recruiter_rid: recruiter_rid.trim(),
+          city: safeCity,
+          state: safeState,
+          pincode: safePincode,
+          company_name: company_name.trim(),
+          role_name: role_name.trim(),
+          positions_open: safePositionsOpen,
+          revenue: safeRevenue,
+          points_per_joining: safePointsPerJoining,
+          access_mode: hasAccessModeColumn ? normalizedAccessMode : "open",
+          recruiterCount: validRecruiterIds.length,
+        },
+      });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   } catch (error) {
     if (error && error.code === "ER_DATA_TOO_LONG") {
       return res.status(400).json({
@@ -515,6 +683,251 @@ router.post("/api/applications/parse-resume", async (req, res) => {
     });
   }
 });
+
+router.get(
+  "/api/jobs/my",
+  requireAuth,
+  requireRoles("job creator", "job adder", "job_adder"),
+  async (req, res) => {
+    try {
+      const authRid = toTrimmedString(req.auth?.rid);
+      if (!authRid) {
+        return res.status(401).json({ message: "Authentication required." });
+      }
+
+      const hasAccessModeColumn = await columnExists("jobs", "access_mode");
+      const [rows] = await pool.query(
+        `SELECT
+          j.jid,
+          j.recruiter_rid,
+          j.company_name,
+          j.role_name,
+          j.city,
+          j.state,
+          j.pincode,
+          j.created_at,
+          ${hasAccessModeColumn ? "j.access_mode" : "'open' AS access_mode"},
+          COUNT(jra.id) AS recruiterCount
+        FROM jobs j
+        LEFT JOIN job_recruiter_access jra
+          ON j.jid = jra.job_jid
+         AND jra.is_active = TRUE
+        WHERE j.recruiter_rid = ?
+        GROUP BY
+          j.jid, j.recruiter_rid, j.company_name, j.role_name, j.city, j.state, j.pincode, j.created_at
+          ${hasAccessModeColumn ? ", j.access_mode" : ""}
+        ORDER BY j.created_at DESC, j.jid DESC`,
+        [authRid]
+      );
+
+      return res.status(200).json({
+        jobs: rows.map((row) => ({
+          ...row,
+          recruiterCount: Number(row.recruiterCount) || 0,
+          access_mode: normalizeAccessMode(row.access_mode) || "open",
+        })),
+      });
+    } catch (error) {
+      return res.status(500).json({
+        message: "Failed to fetch your jobs.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+router.get(
+  "/api/jobs/:jid/access",
+  requireAuth,
+  requireRoles("job creator", "job adder", "job_adder"),
+  requireOwnedJob,
+  async (req, res) => {
+    try {
+      const [rows] = await pool.query(
+        `SELECT
+          r.rid,
+          r.name,
+          r.email,
+          jra.granted_at AS grantedAt,
+          jra.granted_by AS grantedBy,
+          jra.is_active AS isActive,
+          jra.notes
+        FROM job_recruiter_access jra
+        INNER JOIN recruiter r ON r.rid = jra.recruiter_rid
+        WHERE jra.job_jid = ?
+          AND jra.is_active = TRUE
+        ORDER BY r.name ASC, r.rid ASC`,
+        [req.ownedJob.jid]
+      );
+
+      return res.status(200).json({
+        jobId: req.ownedJob.jid,
+        accessMode: req.ownedJob.accessMode,
+        recruiters: rows.map((row) => ({
+          rid: row.rid,
+          name: row.name,
+          email: row.email,
+          grantedAt: row.grantedAt,
+          grantedBy: row.grantedBy,
+          isActive: Boolean(row.isActive),
+          notes: row.notes || null,
+        })),
+      });
+    } catch (error) {
+      return res.status(500).json({
+        message: "Failed to fetch job access list.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+router.post(
+  "/api/jobs/:jid/access",
+  requireAuth,
+  requireRoles("job creator", "job adder", "job_adder"),
+  requireOwnedJob,
+  async (req, res) => {
+    const { recruiterIds, notes } = req.body || {};
+    const normalizedNotes = toTrimmedString(notes) || null;
+    const uniqueRecruiterIds = dedupeStringList(recruiterIds);
+
+    if (uniqueRecruiterIds.length === 0) {
+      return res.status(400).json({ message: "recruiterIds must contain at least one recruiter ID." });
+    }
+
+    try {
+      const { validRecruiterIds, invalidRecruiterIds } = await validateRecruiterIds(
+        uniqueRecruiterIds
+      );
+      if (invalidRecruiterIds.length > 0) {
+        return res.status(400).json({
+          message: "Some recruiterIds are invalid or not recruiter role users.",
+          invalidRecruiterIds,
+        });
+      }
+
+      const authRid = toTrimmedString(req.auth?.rid);
+      const connection = await pool.getConnection();
+      try {
+        await connection.beginTransaction();
+        for (const recruiterId of validRecruiterIds) {
+          await connection.query(
+            `INSERT INTO job_recruiter_access
+              (job_jid, recruiter_rid, granted_by, notes, is_active)
+             VALUES (?, ?, ?, ?, TRUE)
+             ON DUPLICATE KEY UPDATE
+               is_active = TRUE,
+               granted_by = VALUES(granted_by),
+               granted_at = CURRENT_TIMESTAMP,
+               notes = VALUES(notes)`,
+            [req.ownedJob.jid, recruiterId, authRid, normalizedNotes]
+          );
+        }
+        await connection.commit();
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+
+      return res.status(200).json({ success: true, assigned: validRecruiterIds.length });
+    } catch (error) {
+      return res.status(500).json({
+        message: "Failed to assign recruiters for this job.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+router.delete(
+  "/api/jobs/:jid/access/:rid",
+  requireAuth,
+  requireRoles("job creator", "job adder", "job_adder"),
+  requireOwnedJob,
+  async (req, res) => {
+    const recruiterRid = toTrimmedString(req.params.rid);
+    if (!recruiterRid) {
+      return res.status(400).json({ message: "rid is required." });
+    }
+
+    try {
+      const [existingRecruiters] = await pool.query(
+        "SELECT rid FROM recruiter WHERE rid = ? LIMIT 1",
+        [recruiterRid]
+      );
+      if (existingRecruiters.length === 0) {
+        return res.status(404).json({ message: "Recruiter not found." });
+      }
+
+      await pool.query(
+        `UPDATE job_recruiter_access
+         SET is_active = FALSE
+         WHERE job_jid = ? AND recruiter_rid = ?`,
+        [req.ownedJob.jid, recruiterRid]
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: `Access revoked for ${recruiterRid}`,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        message: "Failed to revoke recruiter access.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+router.put(
+  "/api/jobs/:jid/access-mode",
+  requireAuth,
+  requireRoles("job creator", "job adder", "job_adder"),
+  requireOwnedJob,
+  async (req, res) => {
+    const normalizedAccessMode = normalizeAccessMode(req.body?.accessMode);
+    if (!normalizedAccessMode) {
+      return res.status(400).json({
+        message: "accessMode must be either 'open' or 'restricted'.",
+      });
+    }
+
+    try {
+      const hasAccessModeColumn = await columnExists("jobs", "access_mode");
+      if (!hasAccessModeColumn) {
+        return res.status(500).json({
+          message: "jobs.access_mode column is not initialized.",
+        });
+      }
+
+      await pool.query(
+        `UPDATE jobs
+         SET access_mode = ?
+         WHERE jid = ? AND recruiter_rid = ?`,
+        [normalizedAccessMode, req.ownedJob.jid, req.ownedJob.recruiterRid]
+      );
+
+      const warning =
+        normalizedAccessMode === "restricted" && (await getActiveAccessCount(req.ownedJob.jid)) === 0
+          ? "No recruiters are currently assigned to this restricted job."
+          : null;
+
+      return res.status(200).json({
+        success: true,
+        accessMode: normalizedAccessMode,
+        warning,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        message: "Failed to update job access mode.",
+        error: error.message,
+      });
+    }
+  }
+);
 
 router.post("/api/applications", async (req, res) => {
   try {

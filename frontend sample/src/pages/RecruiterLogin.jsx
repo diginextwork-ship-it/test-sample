@@ -11,6 +11,10 @@ import {
 import "../styles/recruiter-login.css";
 import { clearAuthSession, getAuthSession, saveAuthSession } from "../auth/session";
 import { API_BASE_URL, BACKEND_CONNECTION_ERROR } from "../config/api";
+import JobsListTable from "../components/JobAdder/JobsListTable";
+import JobAccessControlModal from "../components/JobAdder/JobAccessControlModal";
+import RecruiterMultiSelect from "../components/JobAdder/RecruiterMultiSelect";
+import { fetchMyJobs, fetchRecruitersList } from "../services/jobAccessService";
 
 const formatTrendDate = (dateValue) => {
   if (!dateValue) return "";
@@ -57,6 +61,10 @@ const toUiJob = (job) => ({
   salary: job.salary || "",
   qualification: job.qualification || "",
   benefits: job.benefits || "",
+  accessMode: String(job.access_mode || "open").trim().toLowerCase() === "restricted"
+    ? "restricted"
+    : "open",
+  recruiterCount: Number(job.recruiterCount) || 0,
 });
 
 export default function RecruiterLogin() {
@@ -74,7 +82,9 @@ export default function RecruiterLogin() {
   });
   const [applications, setApplications] = useState([]);
   const [jobs, setJobs] = useState([]);
-  const [expandedJobId, setExpandedJobId] = useState(null);
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
+  const [activeAccessJobId, setActiveAccessJobId] = useState(null);
+  const [availableRecruiters, setAvailableRecruiters] = useState([]);
   const [dashboardMessage, setDashboardMessage] = useState("");
   const [dashboardMessageType, setDashboardMessageType] = useState("");
   const [candidateName, setCandidateName] = useState("");
@@ -93,6 +103,9 @@ export default function RecruiterLogin() {
     salary: "",
     qualification: "",
     benefits: "",
+    access_mode: "open",
+    recruiterIds: [],
+    accessNotes: "",
   });
   const [jobMessage, setJobMessage] = useState("");
   const [jobMessageType, setJobMessageType] = useState("");
@@ -108,7 +121,10 @@ export default function RecruiterLogin() {
   const canCreateJobs =
     normalizedRole === "job creator" ||
     normalizedRole === "job adder" ||
+    normalizedRole === "job_adder" ||
     Boolean(recruiter?.addjob);
+  const canManageJobAccess =
+    normalizedRole === "job adder" || normalizedRole === "job_adder";
   const canUploadResumes = normalizedRole === "recruiter";
   const showRecruiterPerformance = normalizedRole === "recruiter";
   const getAuthHeaders = (extraHeaders = {}) => {
@@ -155,23 +171,17 @@ export default function RecruiterLogin() {
   const fetchAllJobs = async () => {
     setIsLoadingJobs(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/jobs`);
-      const data = await readJsonResponse(
-        response,
-        "Check VITE_API_BASE_URL and backend route setup."
-      );
-      if (!response.ok) {
-        throw new Error(data?.message || "Failed to fetch jobs.");
-      }
-
+      const data = await fetchMyJobs();
       const allJobs = Array.isArray(data.jobs) ? data.jobs.map(toUiJob) : [];
       setJobs(allJobs);
-      if (allJobs.length > 0 && !allJobs.some((job) => job.id === expandedJobId)) {
-        setExpandedJobId(allJobs[0].id);
-      }
     } finally {
       setIsLoadingJobs(false);
     }
+  };
+
+  const fetchAvailableRecruiters = async () => {
+    const data = await fetchRecruitersList();
+    setAvailableRecruiters(Array.isArray(data.recruiters) ? data.recruiters : []);
   };
 
   const fetchRecruiterResumes = async (rid) => {
@@ -256,7 +266,12 @@ export default function RecruiterLogin() {
       try {
         const tasks = [fetchApplications(recruiter.rid)];
         if (showRecruiterPerformance) tasks.push(fetchRecruiterDashboard(recruiter.rid));
-        if (canCreateJobs) tasks.push(fetchAllJobs());
+        if (canCreateJobs) {
+          tasks.push(fetchAllJobs());
+          if (canManageJobAccess) {
+            tasks.push(fetchAvailableRecruiters());
+          }
+        }
         if (canUploadResumes) tasks.push(fetchRecruiterResumes(recruiter.rid));
         await Promise.all(tasks);
       } catch (error) {
@@ -266,7 +281,7 @@ export default function RecruiterLogin() {
     };
 
     loadDashboard();
-  }, [recruiter?.rid, canCreateJobs, canUploadResumes, showRecruiterPerformance]);
+  }, [recruiter?.rid, canCreateJobs, canManageJobAccess, canUploadResumes, showRecruiterPerformance]);
 
   const recruiterTrendData = useMemo(
     () =>
@@ -355,6 +370,20 @@ export default function RecruiterLogin() {
     setResumeData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleCreateJobRecruiterSelectionChange = (recruiterIds) => {
+    setJobData((prev) => ({ ...prev, recruiterIds }));
+  };
+
+  const handleOpenAccessModal = (jobId) => {
+    setActiveAccessJobId(jobId);
+    setIsAccessModalOpen(true);
+  };
+
+  const handleCloseAccessModal = () => {
+    setIsAccessModalOpen(false);
+    setActiveAccessJobId(null);
+  };
+
   const fileToDataUrl = (file) =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -378,7 +407,12 @@ export default function RecruiterLogin() {
           "Content-Type": "application/json",
           ...getAuthHeaders(),
         },
-        body: JSON.stringify({ ...jobData, recruiter_rid: recruiter.rid }),
+        body: JSON.stringify({
+          ...jobData,
+          recruiter_rid: recruiter.rid,
+          recruiterIds: jobData.access_mode === "restricted" ? jobData.recruiterIds : [],
+          accessNotes: jobData.access_mode === "restricted" ? jobData.accessNotes : "",
+        }),
       });
 
       const data = await readJsonResponse(
@@ -390,8 +424,12 @@ export default function RecruiterLogin() {
         throw new Error(data?.message || "Failed to create job.");
       }
 
-      setJobMessageType("success");
-      setJobMessage(`Job created successfully. Generated JID: ${data.job.jid}`);
+      setJobMessageType(data?.warning ? "error" : "success");
+      setJobMessage(
+        data?.warning
+          ? `Job created (JID: ${data.job.jid}). ${data.warning}`
+          : `Job created successfully. Generated JID: ${data.job.jid}`
+      );
       setJobData({
         city: "",
         state: "",
@@ -407,6 +445,9 @@ export default function RecruiterLogin() {
         salary: "",
         qualification: "",
         benefits: "",
+        access_mode: "open",
+        recruiterIds: [],
+        accessNotes: "",
       });
       try {
         await fetchAllJobs();
@@ -584,79 +625,23 @@ export default function RecruiterLogin() {
             ) : null}
 
             {canCreateJobs ? (
-              <div className="chart-card" style={{ marginTop: "16px" }}>
-                <div className="jobs-header-row">
-                  <h2>All jobs</h2>
-                  <button
-                    type="button"
-                    className="click-here-btn"
-                    onClick={fetchAllJobs}
-                    disabled={isLoadingJobs}
-                  >
-                    {isLoadingJobs ? "Refreshing..." : "Refresh"}
-                  </button>
-                </div>
-
-                {jobs.length === 0 ? (
-                  <p className="chart-empty">{isLoadingJobs ? "Loading jobs..." : "No jobs found."}</p>
-                ) : (
-                  <div className="recruiter-job-list">
-                    {jobs.map((job) => {
-                      const isExpanded = expandedJobId === job.id;
-                      return (
-                        <article key={job.id} className="recruiter-job-item">
-                          <button
-                            type="button"
-                            className="recruiter-job-item-head"
-                            onClick={() => setExpandedJobId(isExpanded ? null : job.id)}
-                          >
-                            <span>Job ID: {job.id}</span>
-                            <span>{job.company}</span>
-                            <span>{job.title}</span>
-                          </button>
-
-                          {isExpanded ? (
-                            <div className="recruiter-job-item-body">
-                              <p>
-                                <strong>Location:</strong>{" "}
-                                {[job.city, job.state, job.pincode].filter(Boolean).join(", ") || "N/A"}
-                              </p>
-                              <p>
-                                <strong>Experience:</strong> {job.experience || "N/A"}
-                              </p>
-                              <p>
-                                <strong>Salary:</strong> {job.salary || "N/A"}
-                              </p>
-                              <p>
-                                <strong>Qualification:</strong> {job.qualification || "N/A"}
-                              </p>
-                              <p>
-                                <strong>Skills:</strong> {job.skills || "N/A"}
-                              </p>
-                              <p>
-                                <strong>Description:</strong> {job.description || "N/A"}
-                              </p>
-                              <p>
-                                <strong>Positions Open:</strong> {job.positionsOpen}
-                              </p>
-                              <p>
-                                <strong>Estimated Revenue:</strong>{" "}
-                                {job.revenue === null ? "N/A" : job.revenue}
-                              </p>
-                              <p>
-                                <strong>Points Per Joining:</strong> {job.pointsPerJoining}
-                              </p>
-                              <p>
-                                <strong>Benefits:</strong> {job.benefits || "N/A"}
-                              </p>
-                            </div>
-                          ) : null}
-                        </article>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <>
+                <JobsListTable
+                  jobs={jobs}
+                  isLoading={isLoadingJobs}
+                  onRefresh={fetchAllJobs}
+                  onEditAccess={handleOpenAccessModal}
+                  canEditAccess={canManageJobAccess}
+                />
+                {canManageJobAccess ? (
+                  <JobAccessControlModal
+                    jobId={activeAccessJobId}
+                    isOpen={isAccessModalOpen}
+                    onClose={handleCloseAccessModal}
+                    onSave={fetchAllJobs}
+                  />
+                ) : null}
+              </>
             ) : null}
 
             <div className="chart-card" style={{ marginTop: "16px" }}>
@@ -892,7 +877,48 @@ export default function RecruiterLogin() {
                       required
                     />
                   </div>
+
+                  {canManageJobAccess ? (
+                    <div className="job-field">
+                      <label htmlFor="access_mode">Access Mode *</label>
+                      <select
+                        id="access_mode"
+                        name="access_mode"
+                        value={jobData.access_mode}
+                        onChange={handleJobInputChange}
+                      >
+                        <option value="open">Open (All Recruiters)</option>
+                        <option value="restricted">Restricted (Selected Recruiters Only)</option>
+                      </select>
+                    </div>
+                  ) : null}
                 </div>
+
+                {canManageJobAccess && jobData.access_mode === "restricted" ? (
+                  <div className="job-field">
+                    <label>Assign Recruiters</label>
+                    <RecruiterMultiSelect
+                      allRecruiters={availableRecruiters}
+                      selectedRecruiters={jobData.recruiterIds}
+                      onSelectionChange={handleCreateJobRecruiterSelectionChange}
+                    />
+                    <label htmlFor="accessNotes">Assignment Notes (optional)</label>
+                    <textarea
+                      id="accessNotes"
+                      name="accessNotes"
+                      value={jobData.accessNotes}
+                      onChange={(event) =>
+                        setJobData((prev) => ({ ...prev, accessNotes: event.target.value }))
+                      }
+                      rows={2}
+                    />
+                    {jobData.recruiterIds.length === 0 ? (
+                      <p className="job-message job-message-error">
+                        Restricted jobs without assigned recruiters will not receive submissions.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div className="job-field">
                   <label htmlFor="job_description">Job Description *</label>
