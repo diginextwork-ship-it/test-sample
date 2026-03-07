@@ -8,6 +8,7 @@ const {
   requireRoles,
   requireRecruiterOwner,
 } = require("../middleware/auth");
+const { validateResumeFile } = require("../middleware/uploadValidation");
 
 const router = express.Router();
 const uploadResume = multer({
@@ -693,14 +694,17 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
     }
 
     const originalName = String(resumeFile.originalname || "").trim();
-    const extensionMatch = originalName.match(/\.([a-z0-9]+)$/i);
-    const extension = extensionMatch ? extensionMatch[1].toLowerCase() : "";
-    const allowedExtensions = new Set(["pdf", "doc", "docx"]);
+    const validation = validateResumeFile({
+      filename: originalName,
+      mimetype: resumeFile.mimetype,
+      buffer: resumeFile.buffer,
+      maxBytes: 5 * 1024 * 1024,
+    });
 
-    if (!allowedExtensions.has(extension)) {
+    if (!validation.ok) {
       return res.status(400).json({
         success: false,
-        error: "Only PDF, DOC, DOCX files are allowed.",
+        error: validation.message,
       });
     }
 
@@ -763,7 +767,7 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
           safeJobId,
           resumeFile.buffer,
           originalName,
-          extension,
+          validation.extension,
         ]
       );
 
@@ -827,14 +831,6 @@ router.post(
   }
 
   const normalizedFilename = String(resumeFilename).trim();
-  const extensionMatch = normalizedFilename.match(/\.([a-z0-9]+)$/i);
-  const extension = extensionMatch ? extensionMatch[1].toLowerCase() : "";
-  const supportedTypes = new Set(["pdf", "doc", "docx"]);
-  if (!supportedTypes.has(extension)) {
-    return res.status(400).json({
-      message: "Only PDF, DOC, or DOCX files are allowed.",
-    });
-  }
 
   try {
     const hasRoleColumn = await columnExists("recruiter", "role");
@@ -878,12 +874,14 @@ router.post(
       ? String(resumeBase64).split(",").pop()
       : String(resumeBase64);
     const resumeBuffer = Buffer.from(base64Payload, "base64");
-    if (!resumeBuffer || resumeBuffer.length === 0) {
-      return res.status(400).json({ message: "Resume file content is invalid." });
-    }
-
-    if (resumeBuffer.length > 10 * 1024 * 1024) {
-      return res.status(400).json({ message: "Resume file size must be 10MB or less." });
+    const validation = validateResumeFile({
+      filename: normalizedFilename,
+      mimetype: resumeMimeType,
+      buffer: resumeBuffer,
+      maxBytes: 5 * 1024 * 1024,
+    });
+    if (!validation.ok) {
+      return res.status(400).json({ message: validation.message });
     }
 
     const hasJobJidColumn = await columnExists("resumes_data", "job_jid");
@@ -928,7 +926,7 @@ router.post(
       }
 
       insertColumns.push("resume", "resume_filename", "resume_type");
-      insertValues.push(resumeBuffer, normalizedFilename, extension);
+      insertValues.push(resumeBuffer, normalizedFilename, validation.extension);
 
       if (hasSubmittedByRoleColumn) {
         insertColumns.push("submitted_by_role");
@@ -973,7 +971,7 @@ router.post(
           rid,
           jobJid: safeJobId,
           resumeFilename: normalizedFilename,
-          resumeType: extension,
+          resumeType: validation.extension,
           resumeMimeType: normalizedMimeType || null,
           atsScore: resumeAts.atsScore,
           atsMatchPercentage: resumeAts.atsMatchPercentage,

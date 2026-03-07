@@ -5,6 +5,7 @@ const recruiterRoutes = require("./routes/recruiterRoutes");
 const jobRoutes = require("./routes/jobRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const statusRoutes = require("./routes/statusRoutes");
+const { createRateLimiter } = require("./middleware/rateLimiter");
 
 const app = express();
 
@@ -53,6 +54,33 @@ app.use(
 );
 
 app.use(express.json({ limit: "25mb" }));
+
+const authRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 10,
+  keyPrefix: "auth",
+  message: "Too many login attempts. Please wait a minute and try again.",
+});
+
+const submissionRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 10,
+  keyPrefix: "resume-submit",
+  message: "Too many resume submissions. Please wait a minute and retry.",
+});
+
+const parseRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 20,
+  keyPrefix: "resume-parse",
+  message: "Too many parse requests. Please wait a minute and retry.",
+});
+
+app.use("/api/recruiters/login", authRateLimiter);
+app.use("/api/admin/login", authRateLimiter);
+app.use("/api/resumes/submit", submissionRateLimiter);
+app.use("/api/applications", submissionRateLimiter);
+app.use("/api/applications/parse-resume", parseRateLimiter);
 
 app.get("/", (_req, res) => {
   res.status(200).json({

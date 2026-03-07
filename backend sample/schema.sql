@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   qualification LONGTEXT NULL,
   benefits TEXT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_jobs_recruiter_rid (recruiter_rid),
   CONSTRAINT fk_jobs_recruiter
     FOREIGN KEY (recruiter_rid) REFERENCES recruiter(rid)
     ON UPDATE CASCADE ON DELETE CASCADE
@@ -47,6 +48,8 @@ ALTER TABLE jobs
   ADD COLUMN IF NOT EXISTS points_per_joining INT NOT NULL DEFAULT 0;
 ALTER TABLE jobs
   ADD COLUMN IF NOT EXISTS access_mode ENUM('open', 'restricted') NOT NULL DEFAULT 'open';
+CREATE INDEX IF NOT EXISTS idx_jobs_access_mode ON jobs (access_mode);
+CREATE INDEX IF NOT EXISTS idx_jobs_recruiter_rid ON jobs (recruiter_rid);
 
 ALTER TABLE recruiter
   ADD COLUMN IF NOT EXISTS points INT NOT NULL DEFAULT 0;
@@ -164,6 +167,7 @@ CREATE TABLE IF NOT EXISTS job_recruiter_access (
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   notes TEXT NULL,
   UNIQUE KEY uniq_job_recruiter_access (job_jid, recruiter_rid),
+  INDEX idx_job_recruiter_access_job_rid (job_jid, recruiter_rid),
   INDEX idx_job_recruiter_access_job_active (job_jid, is_active),
   INDEX idx_job_recruiter_access_recruiter_active (recruiter_rid, is_active),
   CONSTRAINT fk_job_recruiter_access_job
@@ -188,6 +192,7 @@ CREATE TABLE IF NOT EXISTS status (
   dropout INT NULL,
   last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_status_recruiter_rid (recruiter_rid),
   CONSTRAINT fk_status_recruiter
     FOREIGN KEY (recruiter_rid) REFERENCES recruiter(rid)
     ON UPDATE CASCADE ON DELETE CASCADE

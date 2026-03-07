@@ -181,6 +181,14 @@ const ensureJobsTableColumns = async () => {
     await pool.query("CREATE INDEX idx_jobs_created_at ON jobs (created_at)");
   }
 
+  if (!(await indexExists("jobs", "idx_jobs_access_mode"))) {
+    await pool.query("CREATE INDEX idx_jobs_access_mode ON jobs (access_mode)");
+  }
+
+  if (!(await indexExists("jobs", "idx_jobs_recruiter_rid"))) {
+    await pool.query("CREATE INDEX idx_jobs_recruiter_rid ON jobs (recruiter_rid)");
+  }
+
   if (await columnExists("jobs", "qualification")) {
     const qualificationMetadata = await getColumnMetadata(
       "jobs",
@@ -501,6 +509,12 @@ const ensureJobAccessControlSchema = async () => {
       "ALTER TABLE job_recruiter_access ADD COLUMN notes TEXT NULL",
     );
   }
+
+  if (!(await indexExists("job_recruiter_access", "idx_job_recruiter_access_job_rid"))) {
+    await pool.query(
+      "CREATE INDEX idx_job_recruiter_access_job_rid ON job_recruiter_access (job_jid, recruiter_rid)",
+    );
+  }
 };
 
 const ensureStatusTable = async () => {
@@ -562,6 +576,12 @@ const ensureStatusTable = async () => {
   if (!(await columnExists("status", "created_at"))) {
     await pool.query(
       "ALTER TABLE status ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    );
+  }
+
+  if (!(await indexExists("status", "idx_status_recruiter_rid"))) {
+    await pool.query(
+      "CREATE INDEX idx_status_recruiter_rid ON status (recruiter_rid)",
     );
   }
 };

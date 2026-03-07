@@ -8,6 +8,7 @@ const {
   extractApplicantName,
 } = require("../resumeparser/service");
 const { requireAuth, requireRoles } = require("../middleware/auth");
+const { validateResumeFile } = require("../middleware/uploadValidation");
 
 const router = express.Router();
 
@@ -653,11 +654,14 @@ router.post("/api/applications/parse-resume", async (req, res) => {
     }
 
     const resumeBuffer = decodeResumeBuffer(resumeBase64);
-    if (!resumeBuffer || resumeBuffer.length === 0) {
-      return res.status(400).json({ message: "Resume file content is invalid." });
-    }
-    if (resumeBuffer.length > 10 * 1024 * 1024) {
-      return res.status(400).json({ message: "Resume file size must be 10MB or less." });
+    const validation = validateResumeFile({
+      filename: resumeFilename,
+      mimetype: resumeMimeType,
+      buffer: resumeBuffer,
+      maxBytes: 5 * 1024 * 1024,
+    });
+    if (!validation.ok) {
+      return res.status(400).json({ message: validation.message });
     }
 
     const parsed = await parseResumeWithAts({
@@ -976,11 +980,14 @@ router.post("/api/applications", async (req, res) => {
     const selectedJob = jobs[0];
 
     const resumeBuffer = decodeResumeBuffer(resumeBase64);
-    if (!resumeBuffer || resumeBuffer.length === 0) {
-      return res.status(400).json({ message: "Resume file content is invalid." });
-    }
-    if (resumeBuffer.length > 10 * 1024 * 1024) {
-      return res.status(400).json({ message: "Resume file size must be 10MB or less." });
+    const validation = validateResumeFile({
+      filename: resumeFilename,
+      mimetype: resumeMimeType,
+      buffer: resumeBuffer,
+      maxBytes: 5 * 1024 * 1024,
+    });
+    if (!validation.ok) {
+      return res.status(400).json({ message: validation.message });
     }
 
     const parsed = await parseResumeWithAts({
