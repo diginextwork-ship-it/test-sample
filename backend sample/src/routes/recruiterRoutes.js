@@ -1019,9 +1019,14 @@ router.get(
         resume_type AS resumeType,
         ${atsScoreSelection}
         ${atsMatchSelection}
-        uploaded_at AS uploadedAt
-      FROM resumes_data
-      WHERE rid = ?
+        uploaded_at AS uploadedAt,
+        COALESCE(jrs.selection_status, 'pending') AS workflowStatus,
+        jrs.selected_at AS workflowUpdatedAt
+      FROM resumes_data rd
+      LEFT JOIN job_resume_selection jrs
+        ON jrs.job_jid = rd.job_jid
+       AND jrs.res_id = rd.res_id
+      WHERE rd.rid = ?
       ORDER BY uploaded_at DESC`,
       [rid]
     );
@@ -1031,6 +1036,8 @@ router.get(
         ...row,
         atsScore: row.atsScore === null ? null : Number(row.atsScore),
         atsMatchPercentage: row.atsMatchPercentage === null ? null : Number(row.atsMatchPercentage),
+        workflowStatus: row.workflowStatus || "pending",
+        workflowUpdatedAt: row.workflowUpdatedAt || null,
       })),
     });
   } catch (error) {

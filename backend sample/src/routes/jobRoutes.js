@@ -279,6 +279,17 @@ const validateRecruiterIds = async (recruiterIds) => {
   };
 };
 
+const allowedManualResumeStatuses = new Set([
+  "verified",
+  "walk_in",
+  "selected",
+  "rejected",
+  "joined",
+  "dropout",
+  "on_hold",
+  "pending",
+]);
+
 router.get("/api/jobs", async (_req, res) => {
   try {
     const hasCityColumn = await columnExists("jobs", "city");
@@ -734,6 +745,158 @@ router.get(
     } catch (error) {
       return res.status(500).json({
         message: "Failed to fetch your jobs.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+router.get(
+  "/api/jobs/:jid/resume-statuses",
+  requireAuth,
+  requireRoles("job creator", "job adder", "job_adder"),
+  requireOwnedJob,
+  async (req, res) => {
+    try {
+      const hasAtsScoreColumn = await columnExists("resumes_data", "ats_score");
+      const hasAtsMatchColumn = await columnExists("resumes_data", "ats_match_percentage");
+
+      const atsScoreSelection = hasAtsScoreColumn ? "rd.ats_score AS atsScore," : "NULL AS atsScore,";
+      const atsMatchSelection = hasAtsMatchColumn
+        ? "rd.ats_match_percentage AS atsMatchPercentage,"
+        : "NULL AS atsMatchPercentage,";
+
+      const [rows] = await pool.query(
+        `SELECT
+          rd.res_id AS resId,
+          rd.rid AS rid,
+          r.name AS recruiterName,
+          r.email AS recruiterEmail,
+          rd.resume_filename AS resumeFilename,
+          rd.resume_type AS resumeType,
+          ${atsScoreSelection}
+          ${atsMatchSelection}
+          rd.uploaded_at AS uploadedAt,
+          jrs.selection_status AS workflowStatus,
+          jrs.selection_note AS workflowNote,
+          jrs.selected_by_admin AS updatedBy,
+          jrs.selected_at AS updatedAt
+        FROM resumes_data rd
+        INNER JOIN recruiter r ON r.rid = rd.rid
+        LEFT JOIN job_resume_selection jrs
+          ON jrs.job_jid = rd.job_jid
+         AND jrs.res_id = rd.res_id
+        WHERE rd.job_jid = ?
+          AND COALESCE(rd.submitted_by_role, 'recruiter') = 'recruiter'
+        ORDER BY rd.uploaded_at DESC, rd.res_id ASC`,
+        [req.ownedJob.jid]
+      );
+
+      return res.status(200).json({
+        jobId: req.ownedJob.jid,
+        resumes: rows.map((row) => ({
+          resId: row.resId,
+          rid: row.rid,
+          recruiterName: row.recruiterName || "Unknown",
+          recruiterEmail: row.recruiterEmail || null,
+          resumeFilename: row.resumeFilename || null,
+          resumeType: row.resumeType || null,
+          atsScore: row.atsScore === null ? null : Number(row.atsScore),
+          atsMatchPercentage: row.atsMatchPercentage === null ? null : Number(row.atsMatchPercentage),
+          uploadedAt: row.uploadedAt || null,
+          status: row.workflowStatus || "pending",
+          note: row.workflowNote || null,
+          updatedBy: row.updatedBy || null,
+          updatedAt: row.updatedAt || null,
+        })),
+      });
+    } catch (error) {
+      return res.status(500).json({
+        message: "Failed to fetch recruiter resume statuses.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+router.post(
+  "/api/jobs/:jid/resume-statuses",
+  requireAuth,
+  requireRoles("job creator", "job adder", "job_adder"),
+  requireOwnedJob,
+  async (req, res) => {
+    const normalizedResId = toTrimmedString(req.body?.resId);
+    const normalizedStatus = toTrimmedString(req.body?.status).toLowerCase();
+    const normalizedNote =
+      req.body?.note === undefined || req.body?.note === null
+        ? null
+        : toTrimmedString(req.body.note);
+    const actorRid = toTrimmedString(req.auth?.rid);
+
+    if (!normalizedResId || !allowedManualResumeStatuses.has(normalizedStatus)) {
+      return res.status(400).json({
+        message: "resId and a valid status are required.",
+      });
+    }
+
+    try {
+      const [resumeRows] = await pool.query(
+        `SELECT res_id AS resId, job_jid AS jobJid
+         FROM resumes_data
+         WHERE res_id = ?
+         LIMIT 1`,
+        [normalizedResId]
+      );
+
+      if (resumeRows.length === 0) {
+        return res.status(404).json({ message: "Resume not found." });
+      }
+
+      if (Number(resumeRows[0].jobJid) !== req.ownedJob.jid) {
+        return res.status(400).json({
+          message: "The provided resume does not belong to this job.",
+        });
+      }
+
+      if (normalizedStatus === "pending") {
+        await pool.query(
+          `DELETE FROM job_resume_selection
+           WHERE job_jid = ? AND res_id = ?`,
+          [req.ownedJob.jid, normalizedResId]
+        );
+      } else {
+        await pool.query(
+          `INSERT INTO job_resume_selection
+            (job_jid, res_id, selected_by_admin, selection_status, selection_note)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             selected_by_admin = VALUES(selected_by_admin),
+             selection_status = VALUES(selection_status),
+             selection_note = VALUES(selection_note),
+             selected_at = CURRENT_TIMESTAMP`,
+          [
+            req.ownedJob.jid,
+            normalizedResId,
+            actorRid || "job-adder",
+            normalizedStatus,
+            normalizedNote || null,
+          ]
+        );
+      }
+
+      return res.status(200).json({
+        message: "Resume status updated successfully.",
+        data: {
+          jobId: req.ownedJob.jid,
+          resId: normalizedResId,
+          status: normalizedStatus,
+          note: normalizedNote || null,
+          updatedBy: actorRid || "job-adder",
+        },
+      });
+    } catch (error) {
+      return res.status(500).json({
+        message: "Failed to update resume status.",
         error: error.message,
       });
     }

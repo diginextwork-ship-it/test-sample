@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchJobAdderDashboard } from "../../services/performanceService";
 import DashboardOverview from "./DashboardOverview";
 import RecruiterPerformanceTable from "./RecruiterPerformanceTable";
+import ResumeStatusManager from "./ResumeStatusManager";
 
 export default function JobAdderDashboard({ jobsManagementContent }) {
   const [activeTab, setActiveTab] = useState("overview");
@@ -65,7 +66,12 @@ export default function JobAdderDashboard({ jobsManagementContent }) {
       ) : null}
 
       {activeTab === "jobs" ? jobsManagementContent : null}
-      {activeTab === "performance" ? <RecruiterPerformanceTable /> : null}
+      {activeTab === "performance" ? (
+        <>
+          <ResumeStatusManager />
+          <RecruiterPerformanceTable />
+        </>
+      ) : null}
     </section>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchAllRecruiterStatuses } from "../../services/performanceService";
 
-const metricDisplay = (value) => (value === null || value === undefined ? "—" : value);
+const metricDisplay = (value) => (value === null || value === undefined ? "-" : value);
 
 export default function RecruiterPerformanceTable() {
   const [loading, setLoading] = useState(true);
@@ -83,12 +83,12 @@ export default function RecruiterPerformanceTable() {
                       Submitted
                     </button>
                   </th>
-                  <th>Verified <span className="coming-soon-badge">Soon</span></th>
-                  <th>Walk-in <span className="coming-soon-badge">Soon</span></th>
-                  <th>Selected <span className="coming-soon-badge">Soon</span></th>
-                  <th>Rejected <span className="coming-soon-badge">Soon</span></th>
-                  <th>Joined <span className="coming-soon-badge">Soon</span></th>
-                  <th>Dropout <span className="coming-soon-badge">Soon</span></th>
+                  <th>Verified</th>
+                  <th>Walk-in</th>
+                  <th>Selected</th>
+                  <th>Rejected</th>
+                  <th>Joined</th>
+                  <th>Dropout</th>
                   <th>
                     <button type="button" className="table-sort-btn" onClick={() => toggleSort("points")}>
                       Points
@@ -102,12 +102,12 @@ export default function RecruiterPerformanceTable() {
                     <td>{item.name}</td>
                     <td>{item.email}</td>
                     <td className="metric-value">{item.stats?.submitted || 0}</td>
-                    <td className="metric-value pending">{metricDisplay(item.stats?.verified)}</td>
-                    <td className="metric-value pending">{metricDisplay(item.stats?.walk_in)}</td>
-                    <td className="metric-value pending">{metricDisplay(item.stats?.select)}</td>
-                    <td className="metric-value pending">{metricDisplay(item.stats?.reject)}</td>
-                    <td className="metric-value pending">{metricDisplay(item.stats?.joined)}</td>
-                    <td className="metric-value pending">{metricDisplay(item.stats?.dropout)}</td>
+                    <td className="metric-value">{metricDisplay(item.stats?.verified)}</td>
+                    <td className="metric-value">{metricDisplay(item.stats?.walk_in)}</td>
+                    <td className="metric-value">{metricDisplay(item.stats?.select)}</td>
+                    <td className="metric-value">{metricDisplay(item.stats?.reject)}</td>
+                    <td className="metric-value">{metricDisplay(item.stats?.joined)}</td>
+                    <td className="metric-value">{metricDisplay(item.stats?.dropout)}</td>
                     <td>{item.points || 0}</td>
                   </tr>
                 ))}

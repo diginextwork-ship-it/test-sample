@@ -3,13 +3,13 @@ import PerformanceMetricCard from "./PerformanceMetricCard";
 import { fetchRecruiterDashboard } from "../../services/performanceService";
 
 const formatDateTime = (value) => {
-  if (!value) return "—";
+  if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value);
   return parsed.toLocaleString();
 };
 
-const toDisplay = (value) => (value === null || value === undefined ? "—" : value);
+const toDisplay = (value) => (value === null || value === undefined ? "-" : value);
 
 export default function RecruiterDashboard({ recruiterId, onViewJobs }) {
   const [data, setData] = useState(null);
@@ -51,24 +51,9 @@ export default function RecruiterDashboard({ recruiterId, onViewJobs }) {
 
       <div className="metric-grid">
         <PerformanceMetricCard title="Submitted" color="blue" value={data.stats?.submitted || 0} />
-        <PerformanceMetricCard
-          title="Verified"
-          color="green"
-          value={toDisplay(data.stats?.verified)}
-          comingSoon={data.stats?.verified === null}
-        />
-        <PerformanceMetricCard
-          title="Selected"
-          color="purple"
-          value={toDisplay(data.stats?.select)}
-          comingSoon={data.stats?.select === null}
-        />
-        <PerformanceMetricCard
-          title="Joined"
-          color="gold"
-          value={toDisplay(data.stats?.joined)}
-          comingSoon={data.stats?.joined === null}
-        />
+        <PerformanceMetricCard title="Verified" color="green" value={toDisplay(data.stats?.verified)} />
+        <PerformanceMetricCard title="Selected" color="purple" value={toDisplay(data.stats?.select)} />
+        <PerformanceMetricCard title="Joined" color="gold" value={toDisplay(data.stats?.joined)} />
       </div>
 
       <div className="dashboard-info-grid">

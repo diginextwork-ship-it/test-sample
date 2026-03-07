@@ -52,3 +52,21 @@ export const fetchRecruiterDashboard = (rid) =>
     {},
     "Failed to fetch recruiter dashboard."
   );
+
+export const fetchJobResumeStatuses = (jobId) =>
+  request(
+    `${API_BASE_URL}/api/jobs/${encodeURIComponent(jobId)}/resume-statuses`,
+    {},
+    "Failed to fetch job resumes."
+  );
+
+export const updateJobResumeStatus = (jobId, payload) =>
+  request(
+    `${API_BASE_URL}/api/jobs/${encodeURIComponent(jobId)}/resume-statuses`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+    },
+    "Failed to update resume status."
+  );

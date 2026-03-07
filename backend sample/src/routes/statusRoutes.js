@@ -8,6 +8,25 @@ const toRole = (value) => String(value || "").trim().toLowerCase();
 const toRid = (value) => String(value || "").trim();
 const toNullableNumber = (value) => (value === null || value === undefined ? null : Number(value));
 const escapeLike = (value) => String(value || "").replace(/[\\%_]/g, "\\$&");
+const recruiterStatsSubquery = `
+  SELECT
+    rd.rid AS recruiter_rid,
+    COUNT(*) AS submitted,
+    SUM(CASE WHEN jrs.selection_status = 'verified' THEN 1 ELSE 0 END) AS verified,
+    SUM(CASE WHEN jrs.selection_status = 'walk_in' THEN 1 ELSE 0 END) AS walk_in,
+    SUM(CASE WHEN jrs.selection_status = 'selected' THEN 1 ELSE 0 END) AS selected,
+    SUM(CASE WHEN jrs.selection_status = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+    SUM(CASE WHEN jrs.selection_status = 'joined' THEN 1 ELSE 0 END) AS joined,
+    SUM(CASE WHEN jrs.selection_status = 'dropout' THEN 1 ELSE 0 END) AS dropout,
+    MAX(COALESCE(jrs.selected_at, rd.uploaded_at)) AS last_updated,
+    MIN(rd.uploaded_at) AS created_at
+  FROM resumes_data rd
+  LEFT JOIN job_resume_selection jrs
+    ON jrs.job_jid = rd.job_jid
+   AND jrs.res_id = rd.res_id
+  WHERE COALESCE(rd.submitted_by_role, 'recruiter') = 'recruiter'
+  GROUP BY rd.rid
+`;
 
 const isJobAdderRole = (role) => {
   const normalized = toRole(role);
@@ -58,13 +77,13 @@ const buildCalculatedMetrics = (stats) => {
 };
 
 const mapStats = (row) => ({
-  submitted: row.submitted === null || row.submitted === undefined ? null : Number(row.submitted),
-  verified: row.verified === null || row.verified === undefined ? null : Number(row.verified),
-  walk_in: row.walk_in === null || row.walk_in === undefined ? null : Number(row.walk_in),
-  select: row.select === null || row.select === undefined ? null : Number(row.select),
-  reject: row.reject === null || row.reject === undefined ? null : Number(row.reject),
-  joined: row.joined === null || row.joined === undefined ? null : Number(row.joined),
-  dropout: row.dropout === null || row.dropout === undefined ? null : Number(row.dropout),
+  submitted: Number(row.submitted) || 0,
+  verified: Number(row.verified) || 0,
+  walk_in: Number(row.walk_in) || 0,
+  select: Number(row.select) || 0,
+  reject: Number(row.reject) || 0,
+  joined: Number(row.joined) || 0,
+  dropout: Number(row.dropout) || 0,
   last_updated: row.last_updated || null,
   created_at: row.created_at || null,
 });
@@ -86,17 +105,17 @@ router.get(
           r.name,
           r.email,
           COALESCE(r.points, 0) AS points,
-          s.submitted,
-          s.verified,
-          s.walk_in,
-          s.\`select\` AS \`select\`,
-          s.reject,
-          s.joined,
-          s.dropout,
-          s.last_updated,
-          s.created_at
+          COALESCE(rs.submitted, 0) AS submitted,
+          COALESCE(rs.verified, 0) AS verified,
+          COALESCE(rs.walk_in, 0) AS walk_in,
+          COALESCE(rs.selected, 0) AS \`select\`,
+          COALESCE(rs.rejected, 0) AS reject,
+          COALESCE(rs.joined, 0) AS joined,
+          COALESCE(rs.dropout, 0) AS dropout,
+          rs.last_updated,
+          rs.created_at
         FROM recruiter r
-        LEFT JOIN status s ON r.rid = s.recruiter_rid
+        LEFT JOIN (${recruiterStatsSubquery}) rs ON r.rid = rs.recruiter_rid
         WHERE r.rid = ?
           AND LOWER(TRIM(COALESCE(r.role, 'recruiter'))) = 'recruiter'
         LIMIT 1`,
@@ -140,15 +159,15 @@ router.get(
     const sortMap = {
       name: "r.name",
       email: "r.email",
-      submitted: "COALESCE(s.submitted, 0)",
-      verified: "COALESCE(s.verified, 0)",
-      walk_in: "COALESCE(s.walk_in, 0)",
-      select: "COALESCE(s.`select`, 0)",
-      reject: "COALESCE(s.reject, 0)",
-      joined: "COALESCE(s.joined, 0)",
-      dropout: "COALESCE(s.dropout, 0)",
+      submitted: "COALESCE(rs.submitted, 0)",
+      verified: "COALESCE(rs.verified, 0)",
+      walk_in: "COALESCE(rs.walk_in, 0)",
+      select: "COALESCE(rs.selected, 0)",
+      reject: "COALESCE(rs.rejected, 0)",
+      joined: "COALESCE(rs.joined, 0)",
+      dropout: "COALESCE(rs.dropout, 0)",
       points: "COALESCE(r.points, 0)",
-      last_updated: "s.last_updated",
+      last_updated: "rs.last_updated",
     };
 
     const orderBySql = sortMap[sortBy] || sortMap.submitted;
@@ -170,16 +189,16 @@ router.get(
           r.name,
           r.email,
           COALESCE(r.points, 0) AS points,
-          s.submitted,
-          s.verified,
-          s.walk_in,
-          s.\`select\` AS \`select\`,
-          s.reject,
-          s.joined,
-          s.dropout,
-          s.last_updated
+          COALESCE(rs.submitted, 0) AS submitted,
+          COALESCE(rs.verified, 0) AS verified,
+          COALESCE(rs.walk_in, 0) AS walk_in,
+          COALESCE(rs.selected, 0) AS \`select\`,
+          COALESCE(rs.rejected, 0) AS reject,
+          COALESCE(rs.joined, 0) AS joined,
+          COALESCE(rs.dropout, 0) AS dropout,
+          rs.last_updated
         FROM recruiter r
-        LEFT JOIN status s ON r.rid = s.recruiter_rid
+        LEFT JOIN (${recruiterStatsSubquery}) rs ON r.rid = rs.recruiter_rid
         WHERE ${whereSql}
         ORDER BY ${orderBySql} ${sortOrder}, r.name ASC`,
         params
@@ -198,15 +217,15 @@ router.get(
       });
 
       const totalSubmitted = recruiters.reduce(
-        (sum, item) => sum + (item.stats.submitted === null ? 0 : item.stats.submitted),
+        (sum, item) => sum + item.stats.submitted,
         0
       );
       const totalVerified = recruiters.reduce(
-        (sum, item) => sum + (item.stats.verified === null ? 0 : item.stats.verified),
+        (sum, item) => sum + item.stats.verified,
         0
       );
       const totalJoined = recruiters.reduce(
-        (sum, item) => sum + (item.stats.joined === null ? 0 : item.stats.joined),
+        (sum, item) => sum + item.stats.joined,
         0
       );
 
@@ -255,23 +274,30 @@ router.get(
       const [[activeOverview]] = await pool.query(
         `SELECT
           COUNT(*) AS activeRecruiters,
-          COALESCE(SUM(COALESCE(s.submitted, 0)), 0) AS totalSubmissions
-        FROM recruiter r
-        LEFT JOIN status s ON s.recruiter_rid = r.rid
-        WHERE LOWER(TRIM(COALESCE(r.role, 'recruiter'))) = 'recruiter'
-          AND COALESCE(s.submitted, 0) > 0`
+          COALESCE(SUM(stats.submitted), 0) AS totalSubmissions
+        FROM (
+          SELECT rd.rid, COUNT(*) AS submitted
+          FROM resumes_data rd
+          WHERE COALESCE(rd.submitted_by_role, 'recruiter') = 'recruiter'
+          GROUP BY rd.rid
+        ) stats`
       );
 
       const [topPerformersRows] = await pool.query(
         `SELECT
           r.rid,
           r.name,
-          COALESCE(s.submitted, 0) AS submitted,
+          COALESCE(stats.submitted, 0) AS submitted,
           COALESCE(r.points, 0) AS points
         FROM recruiter r
-        LEFT JOIN status s ON s.recruiter_rid = r.rid
+        LEFT JOIN (
+          SELECT rd.rid, COUNT(*) AS submitted
+          FROM resumes_data rd
+          WHERE COALESCE(rd.submitted_by_role, 'recruiter') = 'recruiter'
+          GROUP BY rd.rid
+        ) stats ON stats.rid = r.rid
         WHERE LOWER(TRIM(COALESCE(r.role, 'recruiter'))) = 'recruiter'
-        ORDER BY COALESCE(s.submitted, 0) DESC, COALESCE(r.points, 0) DESC, r.name ASC
+        ORDER BY COALESCE(stats.submitted, 0) DESC, COALESCE(r.points, 0) DESC, r.name ASC
         LIMIT 8`
       );
 
@@ -342,16 +368,16 @@ router.get(
           r.name,
           r.email,
           COALESCE(r.points, 0) AS points,
-          s.submitted,
-          s.verified,
-          s.walk_in,
-          s.\`select\` AS \`select\`,
-          s.reject,
-          s.joined,
-          s.dropout,
-          s.last_updated
+          COALESCE(rs.submitted, 0) AS submitted,
+          COALESCE(rs.verified, 0) AS verified,
+          COALESCE(rs.walk_in, 0) AS walk_in,
+          COALESCE(rs.selected, 0) AS \`select\`,
+          COALESCE(rs.rejected, 0) AS reject,
+          COALESCE(rs.joined, 0) AS joined,
+          COALESCE(rs.dropout, 0) AS dropout,
+          rs.last_updated
         FROM recruiter r
-        LEFT JOIN status s ON s.recruiter_rid = r.rid
+        LEFT JOIN (${recruiterStatsSubquery}) rs ON rs.recruiter_rid = r.rid
         WHERE r.rid = ?
           AND LOWER(TRIM(COALESCE(r.role, 'recruiter'))) = 'recruiter'
         LIMIT 1`,

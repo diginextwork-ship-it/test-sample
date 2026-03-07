@@ -381,6 +381,35 @@ const ensureJobResumeSelectionTable = async () => {
         ON UPDATE CASCADE
     )`,
   );
+
+  const selectionStatusMetadata = await getColumnMetadata(
+    "job_resume_selection",
+    "selection_status",
+  );
+  const selectionStatusType = String(
+    selectionStatusMetadata?.columnType || "",
+  ).toLowerCase();
+  const requiredStatuses = [
+    "verified",
+    "walk_in",
+    "selected",
+    "rejected",
+    "joined",
+    "dropout",
+    "on_hold",
+  ];
+  const hasAllStatuses = requiredStatuses.every((status) =>
+    selectionStatusType.includes(`'${status}'`),
+  );
+
+  if (!hasAllStatuses) {
+    await pool.query(
+      `ALTER TABLE job_resume_selection
+       MODIFY COLUMN selection_status
+       ENUM('verified','walk_in','selected','rejected','joined','dropout','on_hold')
+       NOT NULL DEFAULT 'selected'`,
+    );
+  }
 };
 
 const ensureMoneySumTable = async () => {

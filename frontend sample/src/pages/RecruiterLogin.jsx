@@ -591,6 +591,7 @@ export default function RecruiterLogin() {
                           <th style={{ textAlign: "left", padding: "8px" }}>Filename</th>
                           <th style={{ textAlign: "left", padding: "8px" }}>Type</th>
                           <th style={{ textAlign: "left", padding: "8px" }}>ATS Score</th>
+                          <th style={{ textAlign: "left", padding: "8px" }}>Status</th>
                           <th style={{ textAlign: "left", padding: "8px" }}>Uploaded At</th>
                           <th style={{ textAlign: "left", padding: "8px" }}>File</th>
                         </tr>
@@ -606,6 +607,9 @@ export default function RecruiterLogin() {
                               {item.atsScore === null || item.atsScore === undefined
                                 ? "N/A"
                                 : `${item.atsScore}%`}
+                            </td>
+                            <td style={{ padding: "8px" }}>
+                              {String(item.workflowStatus || "pending").replace(/_/g, " ")}
                             </td>
                             <td style={{ padding: "8px" }}>{formatDateTime(item.uploadedAt)}</td>
                             <td style={{ padding: "8px" }}>

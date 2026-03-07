@@ -92,6 +92,18 @@
   border-radius: 8px;
 }
 
+.recruiter-performance-head select {
+  width: min(360px, 100%);
+  padding: 8px 10px;
+  border: 1px solid #d8d2d2;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.resume-status-manager {
+  margin-bottom: 20px;
+}
+
 .performance-table {
   width: 100%;
   border-collapse: collapse;
