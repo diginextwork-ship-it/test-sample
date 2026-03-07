@@ -73,3 +73,45 @@ export const fetchRecruitersList = (search = "") => {
     "Failed to fetch recruiters list."
   );
 };
+
+export const fetchAccessibleJobs = (recruiterId, options = {}) => {
+  const params = new URLSearchParams();
+  const location = String(options.location || "").trim();
+  const company = String(options.company || "").trim();
+  const search = String(options.search || "").trim();
+  const limit = Number(options.limit);
+  const offset = Number(options.offset);
+
+  if (location) params.set("location", location);
+  if (company) params.set("company", company);
+  if (search) params.set("search", search);
+  if (Number.isInteger(limit) && limit >= 0) params.set("limit", String(limit));
+  if (Number.isInteger(offset) && offset >= 0) params.set("offset", String(offset));
+
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return fetchWithAuth(
+    `${API_BASE_URL}/api/recruiters/${encodeURIComponent(recruiterId)}/accessible-jobs${query}`,
+    {},
+    "Failed to fetch accessible jobs."
+  );
+};
+
+export const checkRecruiterJobAccess = (recruiterId, jobId) =>
+  fetchWithAuth(
+    `${API_BASE_URL}/api/recruiters/${encodeURIComponent(recruiterId)}/can-access/${encodeURIComponent(jobId)}`,
+    {},
+    "Failed to verify job access."
+  );
+
+export const submitRecruiterResume = async (formData) => {
+  const response = await fetch(`${API_BASE_URL}/api/resumes/submit`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: formData,
+  });
+  const data = await readJsonResponse(response);
+  if (!response.ok) {
+    throw new Error(data?.error || data?.message || "Failed to submit resume.");
+  }
+  return data;
+};

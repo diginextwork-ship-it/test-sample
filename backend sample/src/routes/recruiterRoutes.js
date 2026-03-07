@@ -1,4 +1,5 @@
 const express = require("express");
+const multer = require("multer");
 const pool = require("../config/db");
 const { extractResumeAts } = require("../resumeparser/service");
 const {
@@ -9,6 +10,10 @@ const {
 } = require("../middleware/auth");
 
 const router = express.Router();
+const uploadResume = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 const tableExists = async (tableName) => {
   try {
@@ -57,6 +62,116 @@ const normalizeRecruiterRole = (value, addjobValue) => {
   }
   return Boolean(addjobValue) ? "job adder" : "recruiter";
 };
+
+const normalizeAccessMode = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "restricted") return "restricted";
+  return "open";
+};
+
+const toPositiveInt = (value) => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+
+const toNonNegativeInt = (value, fallback) => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) return fallback;
+  return parsed;
+};
+
+const escapeLike = (value) => String(value || "").replace(/[\\%_]/g, "\\$&");
+
+const authorizeRecruiterResourceView = (req, res, rid) => {
+  const role = String(req.auth?.role || "").trim().toLowerCase();
+  const authRid = String(req.auth?.rid || "").trim();
+
+  if (role === "recruiter" && authRid !== rid) {
+    res.status(403).json({ message: "You can only access your own recruiter resources." });
+    return false;
+  }
+
+  if (role === "job adder" || role === "job_adder") {
+    return true;
+  }
+
+  if (role !== "recruiter") {
+    res.status(403).json({ message: "You do not have access to this resource." });
+    return false;
+  }
+
+  return true;
+};
+
+const checkJobAccess = async (recruiterId, jobId) => {
+  const safeJobId = toPositiveInt(jobId);
+  if (!safeJobId) {
+    return { canAccess: false, reason: "job_jid must be a positive integer." };
+  }
+
+  const hasAccessModeColumn = await columnExists("jobs", "access_mode");
+  const [jobRows] = await pool.query(
+    `SELECT
+      jid,
+      company_name,
+      ${hasAccessModeColumn ? "access_mode" : "'open'"} AS access_mode
+    FROM jobs
+    WHERE jid = ?
+    LIMIT 1`,
+    [safeJobId]
+  );
+
+  if (jobRows.length === 0) {
+    return { canAccess: false, reason: "Job not found", jobDetails: null };
+  }
+
+  const job = jobRows[0];
+  const accessMode = normalizeAccessMode(job.access_mode);
+  const jobDetails = {
+    jid: Number(job.jid),
+    company_name: job.company_name || "",
+    access_mode: accessMode,
+  };
+
+  if (accessMode === "open") {
+    return {
+      canAccess: true,
+      reason: "Job is open to all recruiters",
+      jobDetails,
+    };
+  }
+
+  const [accessRows] = await pool.query(
+    `SELECT id
+     FROM job_recruiter_access
+     WHERE job_jid = ? AND recruiter_rid = ? AND is_active = TRUE
+     LIMIT 1`,
+    [safeJobId, recruiterId]
+  );
+
+  if (accessRows.length > 0) {
+    return {
+      canAccess: true,
+      reason: "You have been granted access to this job",
+      jobDetails,
+    };
+  }
+
+  return {
+    canAccess: false,
+    reason: "This job is restricted and you don't have access",
+    jobDetails,
+  };
+};
+
+const runResumeUpload = (req, res) =>
+  new Promise((resolve, reject) => {
+    uploadResume.single("resume_file")(req, res, (error) => {
+      if (error) return reject(error);
+      return resolve();
+    });
+  });
 
 const getRecruiterSummary = async (rid) => {
   const hasSuccessColumn = await columnExists("recruiter", "success");
@@ -339,6 +454,357 @@ router.get(
     }
   }
 );
+
+router.get(
+  "/api/recruiters/:rid/accessible-jobs",
+  requireAuth,
+  requireRoles("recruiter", "job adder", "job_adder"),
+  async (req, res) => {
+    const rid = String(req.params.rid || "").trim();
+    if (!rid) {
+      return res.status(400).json({ message: "rid is required." });
+    }
+
+    if (!authorizeRecruiterResourceView(req, res, rid)) return;
+
+    const locationFilter = String(req.query?.location || "").trim();
+    const companyFilter = String(req.query?.company || "").trim();
+    const searchFilter = String(req.query?.search || "").trim();
+    const limit = Math.min(toNonNegativeInt(req.query?.limit, 10), 100);
+    const offset = toNonNegativeInt(req.query?.offset, 0);
+
+    try {
+      const hasAccessModeColumn = await columnExists("jobs", "access_mode");
+
+      const whereClauses = [
+        hasAccessModeColumn
+          ? "(j.access_mode = 'open' OR (j.access_mode = 'restricted' AND jra.id IS NOT NULL))"
+          : "1 = 1",
+      ];
+      const whereParams = [rid];
+
+      if (locationFilter) {
+        const safeLocation = `%${escapeLike(locationFilter)}%`;
+        whereClauses.push("j.city LIKE ? ESCAPE '\\\\'");
+        whereParams.push(safeLocation);
+      }
+
+      if (companyFilter) {
+        const safeCompany = `%${escapeLike(companyFilter)}%`;
+        whereClauses.push("j.company_name LIKE ? ESCAPE '\\\\'");
+        whereParams.push(safeCompany);
+      }
+
+      if (searchFilter) {
+        const safeSearch = `%${escapeLike(searchFilter)}%`;
+        whereClauses.push("(j.company_name LIKE ? ESCAPE '\\\\' OR j.role_name LIKE ? ESCAPE '\\\\')");
+        whereParams.push(safeSearch, safeSearch);
+      }
+
+      const whereSql = whereClauses.join(" AND ");
+
+      const [jobs] = await pool.query(
+        `SELECT DISTINCT
+          j.jid,
+          j.company_name,
+          j.role_name,
+          j.city,
+          j.state,
+          j.salary,
+          j.positions_open,
+          ${hasAccessModeColumn ? "j.access_mode" : "'open'"} AS access_mode,
+          j.skills,
+          j.created_at
+        FROM jobs j
+        LEFT JOIN job_recruiter_access jra
+          ON j.jid = jra.job_jid
+         AND jra.recruiter_rid = ?
+         AND jra.is_active = TRUE
+        WHERE ${whereSql}
+        ORDER BY j.created_at DESC
+        LIMIT ? OFFSET ?`,
+        [...whereParams, limit, offset]
+      );
+
+      const [countRows] = await pool.query(
+        `SELECT COUNT(DISTINCT j.jid) AS total
+         FROM jobs j
+         LEFT JOIN job_recruiter_access jra
+           ON j.jid = jra.job_jid
+          AND jra.recruiter_rid = ?
+          AND jra.is_active = TRUE
+         WHERE ${whereSql}`,
+        whereParams
+      );
+
+      const total = Number(countRows?.[0]?.total) || 0;
+      return res.status(200).json({
+        jobs: jobs.map((job) => ({
+          jid: Number(job.jid),
+          company_name: job.company_name || "",
+          role_name: job.role_name || "",
+          city: job.city || "",
+          state: job.state || "",
+          salary: job.salary || null,
+          positions_open: Number(job.positions_open) || 0,
+          access_mode: normalizeAccessMode(job.access_mode),
+          skills: job.skills || "",
+          created_at: job.created_at,
+        })),
+        total,
+        hasMore: offset + jobs.length < total,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        message: "Failed to fetch accessible jobs.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+router.get(
+  "/api/recruiters/:rid/can-access/:jid",
+  requireAuth,
+  requireRoles("recruiter", "job adder", "job_adder"),
+  async (req, res) => {
+    const rid = String(req.params.rid || "").trim();
+    const safeJobId = toPositiveInt(req.params.jid);
+    if (!rid) {
+      return res.status(400).json({ message: "rid is required." });
+    }
+    if (!safeJobId) {
+      return res.status(400).json({ message: "jid must be a positive integer." });
+    }
+
+    if (!authorizeRecruiterResourceView(req, res, rid)) return;
+
+    try {
+      const access = await checkJobAccess(rid, safeJobId);
+      return res.status(200).json({
+        canAccess: Boolean(access.canAccess),
+        reason: access.reason,
+        jobDetails: access.jobDetails || null,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        message: "Failed to validate job access.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async (req, res) => {
+  try {
+    await runResumeUpload(req, res);
+  } catch (error) {
+    if (error?.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({
+        success: false,
+        error: "Resume file size must be 5MB or less.",
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      error: "Invalid resume upload payload.",
+    });
+  }
+
+  const recruiterRid = String(req.body?.recruiter_rid || "").trim();
+  const authRid = String(req.auth?.rid || "").trim();
+  const safeJobId = toPositiveInt(req.body?.job_jid);
+
+  if (!authRid || !recruiterRid || authRid !== recruiterRid) {
+    return res.status(403).json({
+      success: false,
+      error: "recruiter_rid must match logged-in recruiter.",
+    });
+  }
+
+  if (!safeJobId) {
+    return res.status(400).json({
+      success: false,
+      error: "job_jid must be a positive integer.",
+    });
+  }
+
+  try {
+    const access = await checkJobAccess(recruiterRid, safeJobId);
+    if (!access.canAccess) {
+      return res.status(403).json({
+        success: false,
+        error: "You don't have permission to submit resumes for this job",
+        canAccess: false,
+      });
+    }
+
+    const requiredFields = [
+      "candidate_name",
+      "phone",
+      "email",
+      "latest_education_level",
+      "board_university",
+      "institution_name",
+      "grading_system",
+      "score",
+      "age",
+    ];
+
+    for (const field of requiredFields) {
+      if (!String(req.body?.[field] || "").trim()) {
+        return res.status(400).json({
+          success: false,
+          error: `${field} is required.`,
+        });
+      }
+    }
+
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const phone = String(req.body?.phone || "").trim();
+    const candidateName = String(req.body?.candidate_name || "").trim();
+    const latestEducationLevel = String(req.body?.latest_education_level || "").trim();
+    const boardUniversity = String(req.body?.board_university || "").trim();
+    const institutionName = String(req.body?.institution_name || "").trim();
+    const gradingSystem = String(req.body?.grading_system || "").trim();
+    const score = String(req.body?.score || "").trim();
+    const age = Number(req.body?.age);
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: "email must be valid.",
+      });
+    }
+
+    if (!Number.isFinite(age) || age < 18 || age > 100) {
+      return res.status(400).json({
+        success: false,
+        error: "age must be between 18 and 100.",
+      });
+    }
+
+    const resumeFile = req.file;
+    if (!resumeFile || !resumeFile.buffer || resumeFile.buffer.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "resume_file is required.",
+      });
+    }
+
+    const originalName = String(resumeFile.originalname || "").trim();
+    const extensionMatch = originalName.match(/\.([a-z0-9]+)$/i);
+    const extension = extensionMatch ? extensionMatch[1].toLowerCase() : "";
+    const allowedExtensions = new Set(["pdf", "doc", "docx"]);
+
+    if (!allowedExtensions.has(extension)) {
+      return res.status(400).json({
+        success: false,
+        error: "Only PDF, DOC, DOCX files are allowed.",
+      });
+    }
+
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const [sequenceResult] = await connection.query("INSERT INTO resume_id_sequence VALUES ()");
+      const sequenceValue = Number(sequenceResult.insertId);
+      const resId = `res_${sequenceValue}`;
+
+      await connection.query(
+        `INSERT INTO applications
+          (
+            job_jid,
+            candidate_name,
+            phone,
+            email,
+            latest_education_level,
+            board_university,
+            institution_name,
+            grading_system,
+            score,
+            age,
+            resume_filename
+          )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          safeJobId,
+          candidateName,
+          phone,
+          email,
+          latestEducationLevel,
+          boardUniversity,
+          institutionName,
+          gradingSystem,
+          score,
+          age,
+          originalName,
+        ]
+      );
+
+      await connection.query(
+        `INSERT INTO resumes_data
+          (
+            res_id,
+            rid,
+            applicant_name,
+            job_jid,
+            resume,
+            resume_filename,
+            resume_type,
+            submitted_by_role
+          )
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'recruiter')`,
+        [
+          resId,
+          recruiterRid,
+          candidateName,
+          safeJobId,
+          resumeFile.buffer,
+          originalName,
+          extension,
+        ]
+      );
+
+      await connection.query(
+        `INSERT INTO status (recruiter_rid, submitted, last_updated)
+         VALUES (?, 1, CURRENT_TIMESTAMP)
+         ON DUPLICATE KEY UPDATE
+           submitted = COALESCE(submitted, 0) + 1,
+           last_updated = CURRENT_TIMESTAMP`,
+        [recruiterRid]
+      );
+
+      const [statusRows] = await connection.query(
+        `SELECT COALESCE(submitted, 0) AS submittedCount
+         FROM status
+         WHERE recruiter_rid = ?
+         LIMIT 1`,
+        [recruiterRid]
+      );
+
+      await connection.commit();
+      return res.status(201).json({
+        success: true,
+        message: "Resume submitted successfully",
+        resumeId: resId,
+        submittedCount: Number(statusRows?.[0]?.submittedCount) || 0,
+      });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: "Failed to submit resume.",
+      details: error.message,
+    });
+  }
+});
 
 router.post(
   "/api/recruiters/:rid/resumes",

@@ -503,6 +503,69 @@ const ensureJobAccessControlSchema = async () => {
   }
 };
 
+const ensureStatusTable = async () => {
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS status (
+      recruiter_rid VARCHAR(20) PRIMARY KEY,
+      submitted INT NOT NULL DEFAULT 0,
+      verified INT NULL,
+      walk_in INT NULL,
+      \`select\` INT NULL,
+      reject INT NULL,
+      joined INT NULL,
+      dropout INT NULL,
+      last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT fk_status_recruiter
+        FOREIGN KEY (recruiter_rid) REFERENCES recruiter(rid)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+    )`,
+  );
+
+  if (!(await columnExists("status", "submitted"))) {
+    await pool.query(
+      "ALTER TABLE status ADD COLUMN submitted INT NOT NULL DEFAULT 0",
+    );
+  }
+
+  if (!(await columnExists("status", "verified"))) {
+    await pool.query("ALTER TABLE status ADD COLUMN verified INT NULL");
+  }
+
+  if (!(await columnExists("status", "walk_in"))) {
+    await pool.query("ALTER TABLE status ADD COLUMN walk_in INT NULL");
+  }
+
+  if (!(await columnExists("status", "select"))) {
+    await pool.query("ALTER TABLE status ADD COLUMN `select` INT NULL");
+  }
+
+  if (!(await columnExists("status", "reject"))) {
+    await pool.query("ALTER TABLE status ADD COLUMN reject INT NULL");
+  }
+
+  if (!(await columnExists("status", "joined"))) {
+    await pool.query("ALTER TABLE status ADD COLUMN joined INT NULL");
+  }
+
+  if (!(await columnExists("status", "dropout"))) {
+    await pool.query("ALTER TABLE status ADD COLUMN dropout INT NULL");
+  }
+
+  if (!(await columnExists("status", "last_updated"))) {
+    await pool.query(
+      "ALTER TABLE status ADD COLUMN last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+    );
+  }
+
+  if (!(await columnExists("status", "created_at"))) {
+    await pool.query(
+      "ALTER TABLE status ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    );
+  }
+};
+
 const initDatabase = async () => {
   await ensureResumeIdSequenceTable();
   await ensureRecruiterTableColumns();
@@ -512,6 +575,7 @@ const initDatabase = async () => {
   await ensureJobResumeSelectionTable();
   await ensureMoneySumTable();
   await ensureJobAccessControlSchema();
+  await ensureStatusTable();
 };
 
 pool.initDatabase = initDatabase;

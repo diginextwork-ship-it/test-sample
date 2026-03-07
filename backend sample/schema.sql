@@ -176,3 +176,19 @@ CREATE TABLE IF NOT EXISTS job_recruiter_access (
     FOREIGN KEY (granted_by) REFERENCES recruiter(rid)
     ON UPDATE CASCADE ON DELETE RESTRICT
 );
+
+CREATE TABLE IF NOT EXISTS status (
+  recruiter_rid VARCHAR(20) PRIMARY KEY,
+  submitted INT NOT NULL DEFAULT 0,
+  verified INT NULL,
+  walk_in INT NULL,
+  `select` INT NULL,
+  reject INT NULL,
+  joined INT NULL,
+  dropout INT NULL,
+  last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_status_recruiter
+    FOREIGN KEY (recruiter_rid) REFERENCES recruiter(rid)
+    ON UPDATE CASCADE ON DELETE CASCADE
+);

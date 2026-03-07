@@ -4,6 +4,7 @@ const healthRoutes = require("./routes/healthRoutes");
 const recruiterRoutes = require("./routes/recruiterRoutes");
 const jobRoutes = require("./routes/jobRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const statusRoutes = require("./routes/statusRoutes");
 
 const app = express();
 
@@ -66,6 +67,7 @@ app.use(healthRoutes);
 app.use(recruiterRoutes);
 app.use(jobRoutes);
 app.use(adminRoutes);
+app.use(statusRoutes);
 
 // 404 handler for API routes
 app.use("/api", (_req, res) => {

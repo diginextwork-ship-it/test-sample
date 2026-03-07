@@ -14,7 +14,12 @@ import { API_BASE_URL, BACKEND_CONNECTION_ERROR } from "../config/api";
 import JobsListTable from "../components/JobAdder/JobsListTable";
 import JobAccessControlModal from "../components/JobAdder/JobAccessControlModal";
 import RecruiterMultiSelect from "../components/JobAdder/RecruiterMultiSelect";
+import RecruiterJobsBoard from "../components/Recruiter/RecruiterJobsBoard";
+import RecruiterDashboard from "../components/Recruiter/RecruiterDashboard";
+import JobAdderDashboard from "../components/JobAdder/JobAdderDashboard";
 import { fetchMyJobs, fetchRecruitersList } from "../services/jobAccessService";
+import "../styles/recruiter-jobs-board.css";
+import "../styles/performance-dashboard.css";
 
 const formatTrendDate = (dateValue) => {
   if (!dateValue) return "";
@@ -110,13 +115,6 @@ export default function RecruiterLogin() {
   const [jobMessage, setJobMessage] = useState("");
   const [jobMessageType, setJobMessageType] = useState("");
   const [uploadedResumes, setUploadedResumes] = useState([]);
-  const [resumeData, setResumeData] = useState({
-    job_jid: "",
-    file: null,
-  });
-  const [isSubmittingResume, setIsSubmittingResume] = useState(false);
-  const [resumeMessage, setResumeMessage] = useState("");
-  const [resumeMessageType, setResumeMessageType] = useState("");
   const normalizedRole = String(recruiter?.role || "").trim().toLowerCase();
   const canCreateJobs =
     normalizedRole === "job creator" ||
@@ -344,32 +342,6 @@ export default function RecruiterLogin() {
     setJobData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleResumeInputChange = (event) => {
-    const { name, value, files } = event.target;
-
-    if (name === "file") {
-      const file = files?.[0] || null;
-      if (!file) {
-        setResumeData((prev) => ({ ...prev, file: null }));
-        return;
-      }
-
-      const allowedExtensions = /\.(pdf|doc|docx)$/i;
-      if (!allowedExtensions.test(file.name)) {
-        setResumeMessageType("error");
-        setResumeMessage("Only PDF, DOC, or DOCX files are allowed.");
-        event.target.value = "";
-        setResumeData((prev) => ({ ...prev, file: null }));
-        return;
-      }
-
-      setResumeData((prev) => ({ ...prev, file }));
-      return;
-    }
-
-    setResumeData((prev) => ({ ...prev, [name]: value }));
-  };
-
   const handleCreateJobRecruiterSelectionChange = (recruiterIds) => {
     setJobData((prev) => ({ ...prev, recruiterIds }));
   };
@@ -383,14 +355,6 @@ export default function RecruiterLogin() {
     setIsAccessModalOpen(false);
     setActiveAccessJobId(null);
   };
-
-  const fileToDataUrl = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error("Failed to read file."));
-      reader.readAsDataURL(file);
-    });
 
   const handleJobSubmit = async (event) => {
     event.preventDefault();
@@ -467,59 +431,14 @@ export default function RecruiterLogin() {
     }
   };
 
-  const handleResumeSubmit = async (event) => {
-    event.preventDefault();
-    if (!recruiter?.rid || !canUploadResumes) return;
-    if (!resumeData.file) {
-      setResumeMessageType("error");
-      setResumeMessage("Please select a resume file.");
-      return;
+  const handleResumeSubmitted = async (result) => {
+    if (!recruiter?.rid) return;
+    const submittedCount = Number(result?.submittedCount);
+    if (Number.isFinite(submittedCount)) {
+      setDashboardMessageType("success");
+      setDashboardMessage(`Resume submitted successfully. Total submitted: ${submittedCount}`);
     }
-
-    setIsSubmittingResume(true);
-    setResumeMessage("");
-    setResumeMessageType("");
-
-    try {
-      const resumeBase64 = await fileToDataUrl(resumeData.file);
-      const response = await fetch(`${API_BASE_URL}/api/recruiters/${recruiter.rid}/resumes`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
-        body: JSON.stringify({
-          job_jid: Number(resumeData.job_jid),
-          resumeBase64,
-          resumeFilename: resumeData.file.name,
-          resumeMimeType: resumeData.file.type,
-        }),
-      });
-
-      const data = await readJsonResponse(
-        response,
-        "Check VITE_API_BASE_URL and backend route setup."
-      );
-
-      if (!response.ok) {
-        throw new Error(data?.message || "Failed to add resume.");
-      }
-
-      setResumeMessageType("success");
-      setResumeMessage(`Resume added successfully. Generated ID: ${data.resume.resId}`);
-      setResumeData({ job_jid: "", file: null });
-      await fetchRecruiterResumes(recruiter.rid);
-    } catch (error) {
-      if (error instanceof TypeError) {
-        setResumeMessageType("error");
-        setResumeMessage(BACKEND_CONNECTION_ERROR);
-        return;
-      }
-      setResumeMessageType("error");
-      setResumeMessage(error.message || "Failed to add resume.");
-    } finally {
-      setIsSubmittingResume(false);
-    }
+    await fetchRecruiterResumes(recruiter.rid);
   };
 
   const handleLogout = () => {
@@ -543,88 +462,36 @@ export default function RecruiterLogin() {
               Logout
             </button>
 
-            {showRecruiterPerformance ? (
-              <>
-                <div className="recruiter-dashboard-grid">
-                  <div className="recruiter-stat-card">
-                    <h2>Monthly completion</h2>
-                    <p className="recruiter-stat-value">{dashboard.summary.thisMonth}</p>
-                    <p className="recruiter-stat-caption">
-                      Number of candidates you completed this month.
-                    </p>
-                  </div>
-
-                  <div className="recruiter-stat-card">
-                    <h2>Total success</h2>
-                    <p className="recruiter-stat-value">{dashboard.summary.success}</p>
-                    <p className="recruiter-stat-caption">Stored in recruiter.success.</p>
-                  </div>
-
-                  <div className="recruiter-stat-card">
-                    <h2>Total points</h2>
-                    <p className="recruiter-stat-value">{dashboard.summary.points}</p>
-                    <p className="recruiter-stat-caption">Awarded when admin marks resumes accepted.</p>
-                  </div>
-                </div>
-
-                <div className="candidate-click-panel">
-                  <label htmlFor="candidateName">Candidate Name (optional)</label>
-                  <input
-                    id="candidateName"
-                    type="text"
-                    value={candidateName}
-                    onChange={(event) => setCandidateName(event.target.value)}
-                    placeholder="Candidate name for performance chart"
-                  />
-                  <button
-                    type="button"
-                    className="click-here-btn"
-                    onClick={handleCompleteCandidate}
-                    disabled={isUpdatingCounter}
-                  >
-                    {isUpdatingCounter ? "Updating..." : "Click Here"}
-                  </button>
-                  {dashboardMessage ? (
-                    <p
-                      className={`job-message ${
-                        dashboardMessageType === "success"
-                          ? "job-message-success"
-                          : "job-message-error"
-                      }`}
-                    >
-                      {dashboardMessage}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="chart-card">
-                  <h2>Your candidate completions this month</h2>
-                  {recruiterTrendData.length > 0 ? (
-                    <div className="chart-wrap">
-                      <ResponsiveContainer width="100%" height={280}>
-                        <LineChart data={recruiterTrendData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="date" />
-                          <YAxis allowDecimals={false} />
-                          <Tooltip />
-                          <Line
-                            type="monotone"
-                            dataKey="clicks"
-                            stroke="#c62828"
-                            strokeWidth={3}
-                            dot={{ r: 4 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <p className="chart-empty">No candidate completions recorded this month yet.</p>
-                  )}
-                </div>
-              </>
+            {canUploadResumes ? (
+              <RecruiterDashboard
+                recruiterId={recruiter.rid}
+                onViewJobs={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              />
             ) : null}
 
-            {canCreateJobs ? (
+            {canManageJobAccess ? (
+              <JobAdderDashboard
+                jobsManagementContent={
+                  <>
+                    <JobsListTable
+                      jobs={jobs}
+                      isLoading={isLoadingJobs}
+                      onRefresh={fetchAllJobs}
+                      onEditAccess={handleOpenAccessModal}
+                      canEditAccess={canManageJobAccess}
+                    />
+                    <JobAccessControlModal
+                      jobId={activeAccessJobId}
+                      isOpen={isAccessModalOpen}
+                      onClose={handleCloseAccessModal}
+                      onSave={fetchAllJobs}
+                    />
+                  </>
+                }
+              />
+            ) : null}
+
+            {canCreateJobs && !canManageJobAccess ? (
               <>
                 <JobsListTable
                   jobs={jobs}
@@ -706,53 +573,10 @@ export default function RecruiterLogin() {
             </div>
             {canUploadResumes ? (
               <div className="chart-card" style={{ marginTop: "16px" }}>
-                <form onSubmit={handleResumeSubmit} className="job-form">
-                  <h2 className="add-job-title">add resume</h2>
-                  <p className="recruiter-stat-caption">
-                    Enter Job ID and upload resume (PDF, DOC, DOCX).
-                  </p>
-
-                  <div className="job-form-grid">
-                    <div className="job-field">
-                      <label htmlFor="resume_job_jid">Job ID *</label>
-                      <input
-                        id="resume_job_jid"
-                        name="job_jid"
-                        type="number"
-                        min="1"
-                        value={resumeData.job_jid}
-                        onChange={handleResumeInputChange}
-                        required
-                      />
-                    </div>
-
-                    <div className="job-field">
-                      <label htmlFor="resume_file">Resume File *</label>
-                      <input
-                        id="resume_file"
-                        name="file"
-                        type="file"
-                        accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        onChange={handleResumeInputChange}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <button type="submit" className="recruiter-login-btn" disabled={isSubmittingResume}>
-                    {isSubmittingResume ? "Uploading..." : "Add Resume"}
-                  </button>
-
-                  {resumeMessage ? (
-                    <p
-                      className={`job-message ${
-                        resumeMessageType === "success" ? "job-message-success" : "job-message-error"
-                      }`}
-                    >
-                      {resumeMessage}
-                    </p>
-                  ) : null}
-                </form>
+                <RecruiterJobsBoard
+                  recruiterId={recruiter.rid}
+                  onResumeSubmitted={handleResumeSubmitted}
+                />
 
                 <div style={{ marginTop: "12px", overflowX: "auto" }}>
                   <h2 style={{ marginBottom: "8px" }}>My uploaded resumes</h2>

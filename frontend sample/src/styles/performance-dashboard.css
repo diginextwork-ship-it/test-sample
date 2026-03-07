@@ -1,0 +1,223 @@
+.job-adder-dashboard {
+  margin-top: 16px;
+}
+
+.dashboard-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.dashboard-tabs button {
+  border: 1px solid #d8d2d2;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.dashboard-tabs button.active {
+  background: #c62828;
+  border-color: #c62828;
+  color: #fff;
+}
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.summary-card {
+  border: 1px solid #eee8e8;
+  background: #fffdfd;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.summary-card h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #5a4f4f;
+}
+
+.summary-card p {
+  margin: 6px 0 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.dashboard-panels {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.dashboard-panel {
+  border: 1px solid #eee8e8;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+}
+
+.performer-row,
+.activity-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px dashed #eee8e8;
+  font-size: 0.86rem;
+}
+
+.performer-row:last-child,
+.activity-row:last-child {
+  border-bottom: 0;
+}
+
+.recruiter-performance-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.recruiter-performance-head input {
+  width: min(320px, 100%);
+  padding: 8px 10px;
+  border: 1px solid #d8d2d2;
+  border-radius: 8px;
+}
+
+.performance-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.performance-table th,
+.performance-table td {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid #eee8e8;
+  white-space: nowrap;
+}
+
+.table-sort-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.metric-value.pending {
+  color: #999;
+  font-style: italic;
+}
+
+.coming-soon-badge {
+  background: #ffc107;
+  color: #000;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  margin-left: 6px;
+}
+
+.coming-soon {
+  display: inline-block;
+  background: #ffc107;
+  color: #000;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  margin-left: 8px;
+  font-weight: 500;
+}
+
+.table-summary {
+  margin-top: 8px;
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  color: #3c3434;
+}
+
+.recruiter-performance-dashboard {
+  margin-top: 16px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.metric-card {
+  border: 1px solid #eee8e8;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+  border-left-width: 4px;
+}
+
+.metric-card.blue {
+  border-left-color: #2196f3;
+}
+
+.metric-card.green {
+  border-left-color: #4caf50;
+}
+
+.metric-card.purple {
+  border-left-color: #9c27b0;
+}
+
+.metric-card.gold {
+  border-left-color: #ffc107;
+}
+
+.metric-card h4 {
+  margin: 0;
+}
+
+.metric-card .metric-value {
+  margin: 8px 0 0;
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+
+.dashboard-info-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.info-card {
+  border: 1px solid #eee8e8;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+}
+
+.big-number {
+  margin: 8px 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.recent-submissions {
+  margin-top: 14px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 24px;
+  color: #666;
+  font-style: italic;
+}
