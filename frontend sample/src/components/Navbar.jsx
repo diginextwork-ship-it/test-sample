@@ -68,8 +68,18 @@ export default function Navbar({ setCurrentPage, currentPage }) {
             </a>
           </div>
 
+          <a
+            href="/#"
+            className="nav-link"
+            onClick={(e) => {
+              e.preventDefault();
+              handleNavClick("aboutus");
+            }}
+          >
+           Blog
+          </a>
+
           <div className="navbar-actions">
-            
             <button
               className="btn btn-secondary"
               onClick={() => handleNavClick("schedulecall")}
