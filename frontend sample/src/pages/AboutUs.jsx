@@ -16,9 +16,9 @@ const values = [
 
 export default function AboutUs() {
   return (
-    <main className="about-page">
+    <main className="about-page ui-page">
       <section className="about-hero">
-        <div className="about-container">
+        <div className="about-container ui-shell">
           <p className="about-badge">About HireNext</p>
           <h1>10 Years of Building Careers and Teams That Last</h1>
           <p className="about-lead">
@@ -30,7 +30,7 @@ export default function AboutUs() {
       </section>
 
       <section className="about-founder">
-        <div className="about-container about-founder-grid">
+        <div className="about-container about-founder-grid ui-shell">
           <div
             className="founder-photo-slot"
             aria-label="Founder photo"
@@ -58,7 +58,7 @@ export default function AboutUs() {
       </section>
 
       <section className="about-highlights">
-        <div className="about-container">
+        <div className="about-container ui-shell">
           <h2>Impact at a Glance</h2>
           <div className="highlight-grid">
             {highlights.map((item) => (
@@ -72,7 +72,7 @@ export default function AboutUs() {
       </section>
 
       <section className="about-values">
-        <div className="about-container">
+        <div className="about-container ui-shell">
           <h2>Our Culture and Commitment</h2>
           <div className="values-list">
             {values.map((value) => (

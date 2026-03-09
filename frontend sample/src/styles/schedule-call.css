@@ -1,6 +1,6 @@
 .schedule-call-page {
   min-height: 75vh;
-  padding: var(--spacing-3xl) var(--spacing-md);
+  padding: 0;
   background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
 }
 
@@ -78,10 +78,6 @@
 }
 
 @media (max-width: 768px) {
-  .schedule-call-page {
-    padding: var(--spacing-2xl) var(--spacing-md);
-  }
-
   .schedule-call-form {
     padding: var(--spacing-xl);
   }

@@ -117,7 +117,7 @@ export default function RecruiterDashboard({ recruiterId, onViewJobs }) {
 
       <div className="status-breakdown">
         <h3>Status Breakdown</h3>
-        <div style={{ overflowX: "auto" }}>
+        <div className="ui-table-wrap">
            <table className="performance-table">
             <thead>
               <tr>
@@ -147,7 +147,7 @@ export default function RecruiterDashboard({ recruiterId, onViewJobs }) {
         <h3>Recent Submissions</h3>
         {Array.isArray(data.recentSubmissions) &&
         data.recentSubmissions.length > 0 ? (
-          <div style={{ overflowX: "auto" }}>
+          <div className="ui-table-wrap">
             <table className="performance-table">
               <thead>
                 <tr>

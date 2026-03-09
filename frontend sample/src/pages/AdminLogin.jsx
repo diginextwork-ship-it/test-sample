@@ -38,8 +38,8 @@ export default function AdminLogin({ onLoginSuccess }) {
   };
 
   return (
-    <main className="recruiter-login-page">
-      <section className="recruiter-login-shell">
+    <main className="recruiter-login-page ui-page">
+      <section className="recruiter-login-shell ui-shell">
         <div className="recruiter-login-card">
           <h1>admin login</h1>
           <p>Sign in to access protected admin pages.</p>

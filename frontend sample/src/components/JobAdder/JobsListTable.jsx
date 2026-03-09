@@ -6,7 +6,7 @@ export default function JobsListTable({
   canEditAccess = true,
 }) {
   return (
-    <div className="chart-card" style={{ marginTop: "16px" }}>
+    <div className="chart-card ui-mt-md">
       <div className="jobs-header-row">
         <h2>My jobs</h2>
         <button

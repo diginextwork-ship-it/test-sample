@@ -121,8 +121,8 @@ export default function JobSearch({ setCurrentPage }) {
   };
 
   return (
-    <main className="job-search-page">
-      <section className="job-search-shell">
+    <main className="job-search-page ui-page">
+      <section className="job-search-shell ui-shell">
         <div className="job-search-topbar">
           <div className="search-field">
             <span className="search-icon" aria-hidden="true">
@@ -164,7 +164,7 @@ export default function JobSearch({ setCurrentPage }) {
               <option value="5-7+ years">5-7+ years</option>
             </select>
           </div>
-          <button className="job-search-btn">Find jobs</button>
+          <button className="job-search-btn ui-btn-primary">Find jobs</button>
         </div>
 
         <div className="job-results-layout">
@@ -228,7 +228,7 @@ export default function JobSearch({ setCurrentPage }) {
                 <p className="job-detail-description">{selectedJob.description}</p>
 
                 <div className="job-detail-actions">
-                  <button className="apply-btn" onClick={handleApplyNow}>Apply now</button>
+                  <button className="apply-btn ui-btn-primary" onClick={handleApplyNow}>Apply now</button>
                 </div>
               </div>
             ) : (

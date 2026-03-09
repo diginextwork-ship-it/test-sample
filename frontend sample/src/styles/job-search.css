@@ -1,7 +1,7 @@
 .job-search-page {
   min-height: 100vh;
   background: #f2f4f7;
-  padding: var(--spacing-2xl) 0;
+  padding: 0;
 }
 
 .job-search-shell {
@@ -80,7 +80,7 @@
   background: var(--primary-red);
   color: var(--white);
   font-weight: 700;
-  font-size: 1.65rem;
+  font-size: clamp(1rem, 2.2vw, 1.25rem);
   padding: 0.85rem 1.45rem;
 }
 
@@ -268,10 +268,6 @@
 }
 
 @media (max-width: 560px) {
-  .job-search-page {
-    padding: var(--spacing-lg) 0;
-  }
-
   .job-search-shell {
     width: min(1300px, 96vw);
   }

@@ -50,8 +50,8 @@ export default function ScheduleCall() {
   };
 
   return (
-    <main className="schedule-call-page">
-      <section className="schedule-call-container">
+    <main className="schedule-call-page ui-page">
+      <section className="schedule-call-container ui-shell">
         <div className="schedule-call-header">
           <h1>schedule a call</h1>
           <p>Share your details and resume, and our team will reach out.</p>

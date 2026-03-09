@@ -142,7 +142,7 @@ export default function ResumeStatusManager() {
       ) : null}
 
       {!loading && resumes.length > 0 ? (
-        <div style={{ overflowX: "auto" }}>
+        <div className="ui-table-wrap">
           <table className="performance-table">
             <thead>
               <tr>

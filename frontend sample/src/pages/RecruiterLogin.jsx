@@ -451,8 +451,8 @@ export default function RecruiterLogin() {
 
   if (recruiter) {
     return (
-      <main className="recruiter-login-page">
-        <section className="recruiter-login-shell recruiter-job-shell">
+      <main className="recruiter-login-page ui-page">
+        <section className="recruiter-login-shell recruiter-job-shell ui-shell">
           <div className="recruiter-login-card recruiter-job-card">
             <h1>recruiter dashboard</h1>
             <p>
@@ -511,8 +511,8 @@ export default function RecruiterLogin() {
               </>
             ) : null}
 
-            <div className="chart-card" style={{ marginTop: "16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+            <div className="chart-card ui-mt-md">
+              <div className="ui-row-between ui-row-wrap">
                 <h2>Applicants and ATS score</h2>
                 <button
                   type="button"
@@ -531,39 +531,39 @@ export default function RecruiterLogin() {
                     : "No applications found yet for your jobs."}
                 </p>
               ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "8px" }}>
+                <div className="ui-table-wrap ui-mt-xs">
+                  <table className="ui-table">
                     <thead>
                       <tr>
-                        <th style={{ textAlign: "left", padding: "8px" }}>Candidate</th>
-                        <th style={{ textAlign: "left", padding: "8px" }}>Email</th>
-                        <th style={{ textAlign: "left", padding: "8px" }}>Job ID</th>
-                        <th style={{ textAlign: "left", padding: "8px" }}>Job</th>
-                        <th style={{ textAlign: "left", padding: "8px" }}>ATS Score</th>
-                        <th style={{ textAlign: "left", padding: "8px" }}>ATS Match</th>
-                        <th style={{ textAlign: "left", padding: "8px" }}>Resume</th>
-                        <th style={{ textAlign: "left", padding: "8px" }}>Applied At</th>
+                        <th>Candidate</th>
+                        <th>Email</th>
+                        <th>Job ID</th>
+                        <th>Job</th>
+                        <th>ATS Score</th>
+                        <th>ATS Match</th>
+                        <th>Resume</th>
+                        <th>Applied At</th>
                       </tr>
                     </thead>
                     <tbody>
                       {applications.map((item) => (
                         <tr key={item.id}>
-                          <td style={{ padding: "8px" }}>{item.candidateName}</td>
-                          <td style={{ padding: "8px" }}>{item.email}</td>
-                          <td style={{ padding: "8px" }}>{item.jobJid ?? "N/A"}</td>
-                          <td style={{ padding: "8px" }}>
+                          <td>{item.candidateName}</td>
+                          <td>{item.email}</td>
+                          <td>{item.jobJid ?? "N/A"}</td>
+                          <td>
                             {item.job?.roleName} ({item.job?.companyName})
                           </td>
-                          <td style={{ padding: "8px" }}>
+                          <td>
                             {item.atsScore === null ? "N/A" : `${item.atsScore}%`}
                           </td>
-                          <td style={{ padding: "8px" }}>
+                          <td>
                             {item.atsMatchPercentage === null
                               ? "N/A"
                               : `${item.atsMatchPercentage}%`}
                           </td>
-                          <td style={{ padding: "8px" }}>{item.resumeFilename || "N/A"}</td>
-                          <td style={{ padding: "8px" }}>{formatDateTime(item.createdAt)}</td>
+                          <td>{item.resumeFilename || "N/A"}</td>
+                          <td>{formatDateTime(item.createdAt)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -572,47 +572,47 @@ export default function RecruiterLogin() {
               )}
             </div>
             {canUploadResumes ? (
-              <div className="chart-card" style={{ marginTop: "16px" }}>
+              <div className="chart-card ui-mt-md">
                 <RecruiterJobsBoard
                   recruiterId={recruiter.rid}
                   onResumeSubmitted={handleResumeSubmitted}
                 />
 
-                <div style={{ marginTop: "12px", overflowX: "auto" }}>
-                  <h2 style={{ marginBottom: "8px" }}>My uploaded resumes</h2>
+                <div className="ui-table-wrap ui-mt-sm">
+                  <h2 className="ui-title-sm">My uploaded resumes</h2>
                   {uploadedResumes.length === 0 ? (
                     <p className="chart-empty">No resumes uploaded yet.</p>
                   ) : (
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <table className="ui-table">
                       <thead>
                         <tr>
-                          <th style={{ textAlign: "left", padding: "8px" }}>Resume ID</th>
-                          <th style={{ textAlign: "left", padding: "8px" }}>Job ID</th>
-                          <th style={{ textAlign: "left", padding: "8px" }}>Filename</th>
-                          <th style={{ textAlign: "left", padding: "8px" }}>Type</th>
-                          <th style={{ textAlign: "left", padding: "8px" }}>ATS Score</th>
-                          <th style={{ textAlign: "left", padding: "8px" }}>Status</th>
-                          <th style={{ textAlign: "left", padding: "8px" }}>Uploaded At</th>
-                          <th style={{ textAlign: "left", padding: "8px" }}>File</th>
+                          <th>Resume ID</th>
+                          <th>Job ID</th>
+                          <th>Filename</th>
+                          <th>Type</th>
+                          <th>ATS Score</th>
+                          <th>Status</th>
+                          <th>Uploaded At</th>
+                          <th>File</th>
                         </tr>
                       </thead>
                       <tbody>
                         {uploadedResumes.map((item) => (
                           <tr key={item.resId}>
-                            <td style={{ padding: "8px" }}>{item.resId}</td>
-                            <td style={{ padding: "8px" }}>{item.jobJid ?? "N/A"}</td>
-                            <td style={{ padding: "8px" }}>{item.resumeFilename}</td>
-                            <td style={{ padding: "8px" }}>{String(item.resumeType || "").toUpperCase()}</td>
-                            <td style={{ padding: "8px" }}>
+                            <td>{item.resId}</td>
+                            <td>{item.jobJid ?? "N/A"}</td>
+                            <td>{item.resumeFilename}</td>
+                            <td>{String(item.resumeType || "").toUpperCase()}</td>
+                            <td>
                               {item.atsScore === null || item.atsScore === undefined
                                 ? "N/A"
                                 : `${item.atsScore}%`}
                             </td>
-                            <td style={{ padding: "8px" }}>
+                            <td>
                               {String(item.workflowStatus || "pending").replace(/_/g, " ")}
                             </td>
-                            <td style={{ padding: "8px" }}>{formatDateTime(item.uploadedAt)}</td>
-                            <td style={{ padding: "8px" }}>
+                            <td>{formatDateTime(item.uploadedAt)}</td>
+                            <td>
                               <a
                                 href={`${API_BASE_URL}/api/recruiters/${recruiter.rid}/resumes/${item.resId}/file`}
                                 target="_blank"
@@ -762,7 +762,7 @@ export default function RecruiterLogin() {
 
                 <details className="job-field">
                   <summary>Optional fields</summary>
-                  <div className="job-form-grid" style={{ marginTop: "10px" }}>
+                  <div className="job-form-grid ui-mt-sm">
                     <div className="job-field">
                       <label htmlFor="city">City</label>
                       <input id="city" name="city" value={jobData.city} onChange={handleJobInputChange} />
@@ -842,8 +842,8 @@ export default function RecruiterLogin() {
   }
 
   return (
-    <main className="recruiter-login-page">
-      <section className="recruiter-login-shell">
+    <main className="recruiter-login-page ui-page">
+      <section className="recruiter-login-shell ui-shell">
         <div className="recruiter-login-card">
           <h1>recruiter login</h1>
           <p>Sign in to manage openings and candidate pipelines.</p>

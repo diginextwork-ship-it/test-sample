@@ -1,6 +1,6 @@
 .recruiter-login-page {
   min-height: 80vh;
-  padding: var(--spacing-3xl) var(--spacing-md);
+  padding: 0;
   background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
 }
 
@@ -480,10 +480,6 @@
 }
 
 @media (max-width: 768px) {
-  .recruiter-login-page {
-    padding: var(--spacing-xl) 0.75rem;
-  }
-
   .recruiter-login-card {
     padding: 1rem;
     border-radius: 0.8rem;

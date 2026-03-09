@@ -2,8 +2,8 @@ import "../styles/contactus.css";
 
 export default function Contact() {
   return (
-    <main className="contactus-page">
-      <section className="contactus-container">
+    <main className="contactus-page ui-page">
+      <section className="contactus-container ui-shell">
         <div className="contactus-header">
           <h1>contact us</h1>
           <p>Choose the fastest way to reach our team.</p>

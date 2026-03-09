@@ -230,8 +230,8 @@ export default function JobApplication({ setCurrentPage }) {
   };
 
   return (
-    <main className="job-application-page">
-      <section className="job-application-shell">
+    <main className="job-application-page ui-page">
+      <section className="job-application-shell ui-shell">
         <div className="job-application-card">
           <h1>Job application form</h1>
           <p>Complete the form below to submit your application.</p>

@@ -1,7 +1,7 @@
 .job-application-page {
   min-height: 100vh;
   background: #f2f4f7;
-  padding: var(--spacing-2xl) var(--spacing-md);
+  padding: 0;
 }
 
 .job-application-shell {
@@ -97,10 +97,6 @@
 }
 
 @media (max-width: 560px) {
-  .job-application-page {
-    padding: var(--spacing-lg) var(--spacing-sm);
-  }
-
   .job-application-card {
     padding: var(--spacing-lg);
   }

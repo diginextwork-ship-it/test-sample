@@ -68,7 +68,7 @@ export default function RecruiterPerformanceTable() {
 
       {!loading && !error ? (
         <>
-          <div style={{ overflowX: "auto" }}>
+          <div className="ui-table-wrap">
             <table className="performance-table">
               <thead>
                 <tr>
