@@ -3,9 +3,9 @@ import founderPhoto from "../assets/founders_pic.jpeg";
 
 const highlights = [
   { value: "30K+", label: "Placements across India" },
-  { value: "200+", label: "Recruiters who have worked with our team" },
-  { value: "50+", label: "Current team members" },
-  { value: "70+", label: "Corporate and MNC partners empanelled" },
+  { value: "1000+", label: "Recruiters who have worked with our team" },
+  { value: "75+", label: "Current team members" },
+  { value: "100+", label: "Corporate and MNC partners empanelled" },
 ];
 
 const values = [
@@ -14,18 +14,38 @@ const values = [
   "Exceptional recruitment solutions built on integrity, expertise and personalised service",
 ];
 
+const milestones = [
+  { year: "2016", label: "HireNext founded" },
+  { year: "2020", label: "Scaled multi-city hiring" },
+  { year: "2023", label: "Stronger enterprise partnerships" },
+  { year: "2026", label: "10-year milestone" },
+];
+
 export default function AboutUs() {
   return (
     <main className="about-page ui-page">
+      <div className="about-ambient about-ambient-one" aria-hidden="true" />
+      <div className="about-ambient about-ambient-two" aria-hidden="true" />
+
       <section className="about-hero">
         <div className="about-container ui-shell">
-          <p className="about-badge">About HireNext</p>
-          <h1>10 Years of Building Careers and Teams That Last</h1>
-          <p className="about-lead">
-            Founded in 2016 by <strong>Shubham Barsaiya Sir</strong>, HireNext
-            is completing a decade in 2026 with a mission to transform hiring
-            outcomes across India.
-          </p>
+          <div className="about-hero-panel">
+            <p className="about-badge">About HireNext</p>
+            <h1>10 Years of Building Careers and Teams That Last</h1>
+            <p className="about-lead">
+              Founded in 2016 by <strong>Shubham Barsaiya Sir</strong>, HireNext
+              is completing a decade in 2026 with a mission to transform hiring
+              outcomes across India.
+            </p>
+            <div className="milestone-strip">
+              {milestones.map((item) => (
+                <article className="milestone-card" key={item.year}>
+                  <p className="milestone-year">{item.year}</p>
+                  <p className="milestone-label">{item.label}</p>
+                </article>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
