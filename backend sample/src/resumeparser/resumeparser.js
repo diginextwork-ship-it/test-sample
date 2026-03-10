@@ -293,8 +293,6 @@ async function atsExtractor(resumeData) {
        - latest_education_level
        - board_university
        - institution_name
-       - grading_system
-       - score
     10. age
 
     Return valid JSON only. Do not include markdown or code blocks.

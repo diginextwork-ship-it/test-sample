@@ -4,6 +4,7 @@ import Footer from "./components/Footer";
 import Home from "./pages/Home";
 import AboutUs from "./pages/AboutUs";
 import Contact from "./pages/contact";
+import Gallery from "./pages/Gallery";
 import JobSearch from "./pages/JobSearch";
 import JobApplication from "./pages/JobApplication";
 import RecruiterLogin from "./pages/RecruiterLogin";
@@ -26,6 +27,7 @@ const PAGE_TO_PATH = {
   applyjob: "/jobs/apply",
   contactus: "/contactus",
   aboutus: "/about-us",
+  gallery: "/gallery",
   schedulecall: "/schedule-call",
   recruiterlogin: "/recruiter-login",
   adminlogin: "/admin-login",
@@ -65,6 +67,7 @@ const getPageFromPath = (pathname) => {
   if (normalizedPath === "/jobs/apply") return "applyjob";
   if (normalizedPath === "/contactus") return "contactus";
   if (normalizedPath === "/about-us") return "aboutus";
+  if (normalizedPath === "/gallery") return "gallery";
   if (normalizedPath === "/schedule-call") return "schedulecall";
   if (normalizedPath === "/recruiter-login") return "recruiterlogin";
   if (normalizedPath === "/admin-login") return "adminlogin";
@@ -134,13 +137,15 @@ export default function App() {
       case "contactus":
         return <Contact setCurrentPage={setCurrentPage} />;
       case "aboutus":
-        return <AboutUs />;
+        return <AboutUs setCurrentPage={setCurrentPage} />;
+      case "gallery":
+        return <Gallery setCurrentPage={setCurrentPage} />;
       case "jobs":
         return <JobSearch setCurrentPage={setCurrentPage} />;
       case "applyjob":
         return <JobApplication setCurrentPage={setCurrentPage} />;
       case "schedulecall":
-        return <ScheduleCall />;
+        return <ScheduleCall setCurrentPage={setCurrentPage} />;
       case "recruiterlogin":
         return <RecruiterLogin />;
       case "adminlogin":

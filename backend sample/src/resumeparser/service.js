@@ -10,6 +10,17 @@ const toNumberOrNull = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const toPercentageNumber = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const numeric = toNumberOrNull(value);
+  const fallback =
+    numeric !== null
+      ? numeric
+      : toNumberOrNull(String(value).replace(/[^0-9.]/g, ""));
+  if (fallback === null) return null;
+  return Math.max(0, Math.min(100, Number(fallback)));
+};
+
 const getResumeExtension = (filename) => {
   const match = String(filename || "").trim().match(/\.([a-z0-9]+)$/i);
   return match ? match[1].toLowerCase() : "";
@@ -147,16 +158,6 @@ const extractAutofillFallbackFromText = (resumeText) => {
   ];
   const matchedDegree = degreeHints.find((item) => item.pattern.test(text));
 
-  const gradingSystem = /\bgpa\b/i.test(text)
-    ? "gpa"
-    : /\b(?:\d{1,3}\s?%|percentage)\b/i.test(text)
-    ? "percentage"
-    : "";
-
-  const scoreMatch =
-    text.match(/\b(?:cgpa|gpa)\s*[:\-]?\s*(\d+(?:\.\d+)?)\b/i) ||
-    text.match(/\b(\d{1,3}(?:\.\d+)?)\s?%\b/);
-
   return {
     full_name: name || null,
     email: emailMatch ? emailMatch[0] : null,
@@ -166,8 +167,6 @@ const extractAutofillFallbackFromText = (resumeText) => {
         latest_education_level: matchedDegree ? matchedDegree.level : null,
         board_university: boardUniversity,
         institution_name: institutionName,
-        grading_system: gradingSystem || null,
-        score: scoreMatch ? scoreMatch[1] : null,
       },
     ],
     age: ageMatch ? ageMatch[1] : toAgeFromDob(dobMatch?.[1]),
@@ -302,12 +301,10 @@ const parseResumeWithAts = async ({ resumeBuffer, resumeFilename, jobDescription
         ? aiAtsRawJson
         : fallbackAtsRawJson;
 
-    const atsScore = toNumberOrNull(atsRawJson?.ats_score);
-    const matchPercentageNumeric = String(atsRawJson?.match_percentage || "").replace(
-      /[^\d.]/g,
-      ""
-    );
-    const atsMatchPercentage = toNumberOrNull(matchPercentageNumeric);
+    const atsScoreFromModel = toPercentageNumber(atsRawJson?.ats_score);
+    const atsMatchFromModel = toPercentageNumber(atsRawJson?.match_percentage);
+    const atsScore = atsScoreFromModel ?? atsMatchFromModel;
+    const atsMatchPercentage = atsMatchFromModel ?? atsScoreFromModel;
 
     return {
       ok: true,

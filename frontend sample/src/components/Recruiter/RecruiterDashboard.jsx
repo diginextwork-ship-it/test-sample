@@ -20,6 +20,9 @@ export default function RecruiterDashboard({ recruiterId, onViewJobs }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [filters, setFilters] = useState({ startDate: "", endDate: "" });
+  const [appliedFilters, setAppliedFilters] = useState({ startDate: "", endDate: "" });
+  const [filterError, setFilterError] = useState("");
 
   useEffect(() => {
     if (!recruiterId) return;
@@ -29,7 +32,7 @@ export default function RecruiterDashboard({ recruiterId, onViewJobs }) {
       setLoading(true);
       setError("");
       try {
-        const response = await fetchRecruiterDashboard(recruiterId);
+        const response = await fetchRecruiterDashboard(recruiterId, appliedFilters);
         if (!active) return;
         setData(response);
       } catch (loadError) {
@@ -44,7 +47,36 @@ export default function RecruiterDashboard({ recruiterId, onViewJobs }) {
     return () => {
       active = false;
     };
-  }, [recruiterId]);
+  }, [recruiterId, appliedFilters]);
+
+  const handleFilterChange = (field) => (event) => {
+    const nextValue = event.target.value;
+    setFilters((prev) => ({ ...prev, [field]: nextValue }));
+    if (filterError) setFilterError("");
+  };
+
+  const handleApplyFilters = () => {
+    const startDate = String(filters.startDate || "").trim();
+    const endDate = String(filters.endDate || "").trim();
+
+    if ((startDate && !endDate) || (!startDate && endDate)) {
+      setFilterError("Select both start date and end date.");
+      return;
+    }
+    if (startDate && endDate && startDate > endDate) {
+      setFilterError("Start date cannot be after end date.");
+      return;
+    }
+
+    setFilterError("");
+    setAppliedFilters({ startDate, endDate });
+  };
+
+  const handleClearFilters = () => {
+    setFilterError("");
+    setFilters({ startDate: "", endDate: "" });
+    setAppliedFilters({ startDate: "", endDate: "" });
+  };
 
   if (loading) return <p className="chart-empty">Loading performance dashboard...</p>;
   if (error) return <p className="job-message job-message-error">{error}</p>;
@@ -58,7 +90,52 @@ export default function RecruiterDashboard({ recruiterId, onViewJobs }) {
   return (
     <section className="recruiter-performance-dashboard">
       <h2>My Performance Dashboard</h2>
-
+      <div className="dashboard-date-filter">
+        <div className="dashboard-date-input">
+          <label htmlFor="recruiterDashboardStartDate">Start date</label>
+          <input
+            id="recruiterDashboardStartDate"
+            type="date"
+            value={filters.startDate}
+            onChange={handleFilterChange("startDate")}
+          />
+        </div>
+        <div className="dashboard-date-input">
+          <label htmlFor="recruiterDashboardEndDate">End date</label>
+          <input
+            id="recruiterDashboardEndDate"
+            type="date"
+            value={filters.endDate}
+            onChange={handleFilterChange("endDate")}
+          />
+        </div>
+        <div className="dashboard-date-actions">
+          <button
+            type="button"
+            className="dashboard-date-btn"
+            onClick={handleApplyFilters}
+          >
+            Apply
+          </button>
+          <button
+            type="button"
+            className="dashboard-date-btn dashboard-date-btn-secondary"
+            onClick={handleClearFilters}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+      {filterError ? (
+        <p className="job-message job-message-error">{filterError}</p>
+      ) : null}
+      {appliedFilters.startDate && appliedFilters.endDate ? (
+        <p className="dashboard-filter-summary">
+          Showing statistics from <strong>{appliedFilters.startDate}</strong> to{" "}
+          <strong>{appliedFilters.endDate}</strong>.
+        </p>
+      ) : null}
+      <h3>Status Breakdown</h3>
       <div className="metric-grid">
         <PerformanceMetricCard
           title="Submitted"
@@ -76,6 +153,11 @@ export default function RecruiterDashboard({ recruiterId, onViewJobs }) {
           value={toDisplay(data.stats?.select)}
         />
         <PerformanceMetricCard
+          title="Rejected"
+          color="red"
+          value={toDisplay(data.stats?.reject)}
+        />
+        <PerformanceMetricCard
           title="Joined"
           color="gold"
           value={toDisplay(data.stats?.joined)}
@@ -83,12 +165,7 @@ export default function RecruiterDashboard({ recruiterId, onViewJobs }) {
         <PerformanceMetricCard
           title="Dropout"
           color="pink"
-          value={toDisplay(data.stats?.Dropout)}
-        />
-        <PerformanceMetricCard
-          title="Rejected"
-          color="red"
-          value={toDisplay(data.stats?.Rejected)}
+          value={toDisplay(data.stats?.dropout)}
         />
       </div>
 
@@ -114,34 +191,6 @@ export default function RecruiterDashboard({ recruiterId, onViewJobs }) {
         </div>
         <div className="points-progress-actions"></div>
       </article>
-
-      <div className="status-breakdown">
-        <h3>Status Breakdown</h3>
-        <div className="ui-table-wrap">
-           <table className="performance-table">
-            <thead>
-              <tr>
-                <th>Verified</th>
-                <th>Walk-in</th>
-                <th>Selected</th>
-                <th>Rejected</th>
-                <th>Joined</th>
-                <th>Dropout</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>{toDisplay(data.stats?.verified)}</td>
-                <td>{toDisplay(data.stats?.walk_in)}</td>
-                <td>{toDisplay(data.stats?.select)}</td>
-                <td>{toDisplay(data.stats?.reject)}</td>
-                <td>{toDisplay(data.stats?.joined)}</td>
-                <td>{toDisplay(data.stats?.dropout)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
 
       <div className="recent-submissions">
         <h3>Recent Submissions</h3>

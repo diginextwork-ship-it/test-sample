@@ -1,5 +1,7 @@
 import "../styles/about-us.css";
-import founderPhoto from "../assets/founders_pic.jpeg";
+import founderPhoto from "../assets/about/founders_pic.jpeg";
+import directorPhoto from "../assets/about/director.jpeg";
+import PageBackButton from "../components/PageBackButton";
 
 const highlights = [
   { value: "30K+", label: "Placements across India" },
@@ -21,7 +23,7 @@ const milestones = [
   { year: "2026", label: "10-year milestone" },
 ];
 
-export default function AboutUs() {
+export default function AboutUs({ setCurrentPage }) {
   return (
     <main className="about-page ui-page">
       <div className="about-ambient about-ambient-one" aria-hidden="true" />
@@ -29,6 +31,9 @@ export default function AboutUs() {
 
       <section className="about-hero">
         <div className="about-container ui-shell">
+          <div className="ui-page-back">
+            <PageBackButton setCurrentPage={setCurrentPage} />
+          </div>
           <div className="about-hero-panel">
             <p className="about-badge">About HireNext</p>
             <h1>10 Years of Building Careers and Teams That Last</h1>
@@ -48,13 +53,23 @@ export default function AboutUs() {
           </div>
         </div>
       </section>
+      <section className="about-highlights">
+        <div className="about-container ui-shell">
+          <h2>Impact at a Glance</h2>
+          <div className="highlight-grid">
+            {highlights.map((item) => (
+              <article className="highlight-card" key={item.label}>
+                <p className="highlight-value">{item.value}</p>
+                <p className="highlight-label">{item.label}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <section className="about-founder">
         <div className="about-container about-founder-grid ui-shell">
-          <div
-            className="founder-photo-slot"
-            aria-label="Founder photo"
-          >
+          <div className="founder-photo-slot" aria-label="Founder photo">
             <img
               src={founderPhoto}
               alt="Shubham Barsaiya Sir"
@@ -75,18 +90,23 @@ export default function AboutUs() {
             </p>
           </div>
         </div>
-      </section>
-
-      <section className="about-highlights">
-        <div className="about-container ui-shell">
-          <h2>Impact at a Glance</h2>
-          <div className="highlight-grid">
-            {highlights.map((item) => (
-              <article className="highlight-card" key={item.label}>
-                <p className="highlight-value">{item.value}</p>
-                <p className="highlight-label">{item.label}</p>
-              </article>
-            ))}
+        <div className="about-container about-founder-grid about-founder-grid-director ui-shell">
+          <div className="founder-photo-slot" aria-label="Director photo">
+            <img
+              src={directorPhoto}
+              alt="Radhika mam"
+              className="founder-photo"
+            />
+          </div>
+          <div className="founder-copy">
+            <h2>
+              <strong>Radhika mam</strong>
+            </h2>
+            <p>Our director</p>
+            <p>
+              She leads with clarity, discipline, and deep commitment to people,
+              helping HireNext scale teams and relationships with consistency.
+            </p>
           </div>
         </div>
       </section>

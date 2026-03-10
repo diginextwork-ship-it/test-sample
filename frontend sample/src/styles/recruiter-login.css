@@ -129,8 +129,30 @@
   max-width: 920px;
 }
 
+@media (min-width: 769px) {
+  .recruiter-job-shell {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .recruiter-job-card {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
 .recruiter-job-card {
   padding: var(--spacing-xl) var(--spacing-2xl);
+}
+
+@media (min-width: 769px) {
+  .recruiter-job-card {
+    padding-left: 0;
+    padding-right: 0;
+  }
 }
 
 .recruiter-dashboard-grid {

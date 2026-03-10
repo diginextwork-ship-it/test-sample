@@ -8,6 +8,71 @@ const toRole = (value) => String(value || "").trim().toLowerCase();
 const toRid = (value) => String(value || "").trim();
 const toNullableNumber = (value) => (value === null || value === undefined ? null : Number(value));
 const escapeLike = (value) => String(value || "").replace(/[\\%_]/g, "\\$&");
+const isValidDateOnly = (value) => {
+  const normalized = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return false;
+
+  const [yearText, monthText, dayText] = normalized.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+};
+const addDaysDateOnly = (value, days) => {
+  const [yearText, monthText, dayText] = String(value).split("-");
+  const parsed = new Date(Date.UTC(Number(yearText), Number(monthText) - 1, Number(dayText)));
+  parsed.setUTCDate(parsed.getUTCDate() + Number(days || 0));
+  return parsed.toISOString().slice(0, 10);
+};
+const parseDateRange = (startRaw, endRaw) => {
+  const startDate = String(startRaw || "").trim();
+  const endDate = String(endRaw || "").trim();
+
+  if (!startDate && !endDate) {
+    return {
+      startDate: null,
+      endDate: null,
+      startDateTime: null,
+      endExclusiveDateTime: null,
+      hasDateRange: false,
+      error: null,
+    };
+  }
+
+  if (!startDate || !endDate) {
+    return {
+      error: "Both startDate and endDate are required when filtering by date.",
+    };
+  }
+
+  if (!isValidDateOnly(startDate) || !isValidDateOnly(endDate)) {
+    return {
+      error: "Invalid date format. Use YYYY-MM-DD for startDate and endDate.",
+    };
+  }
+
+  if (startDate > endDate) {
+    return {
+      error: "startDate cannot be after endDate.",
+    };
+  }
+
+  return {
+    startDate,
+    endDate,
+    startDateTime: `${startDate} 00:00:00`,
+    endExclusiveDateTime: `${addDaysDateOnly(endDate, 1)} 00:00:00`,
+    hasDateRange: true,
+    error: null,
+  };
+};
 const recruiterStatsSubquery = `
   SELECT
     rd.rid AS recruiter_rid,
@@ -360,8 +425,32 @@ router.get(
 
     const rid = toRid(req.params.rid);
     if (!rid) return res.status(400).json({ error: "rid is required." });
+    const {
+      startDate,
+      endDate,
+      startDateTime,
+      endExclusiveDateTime,
+      hasDateRange,
+      error: dateError,
+    } = parseDateRange(req.query?.startDate, req.query?.endDate);
+    if (dateError) {
+      return res.status(400).json({ error: dateError });
+    }
 
     try {
+      const submittedRangeCondition = hasDateRange ? "rd.uploaded_at >= ? AND rd.uploaded_at < ?" : "1=1";
+      const statusRangeCondition = hasDateRange ? "jrs.selected_at >= ? AND jrs.selected_at < ?" : "1=1";
+      const activityRangeCondition = hasDateRange
+        ? "((rd.uploaded_at >= ? AND rd.uploaded_at < ?) OR (jrs.selected_at >= ? AND jrs.selected_at < ?))"
+        : "1=1";
+      const statsQueryParams = [];
+      if (hasDateRange) {
+        for (let idx = 0; idx < 10; idx += 1) {
+          statsQueryParams.push(startDateTime, endExclusiveDateTime);
+        }
+      }
+      statsQueryParams.push(rid);
+
       const [recruiterRows] = await pool.query(
         `SELECT
           r.rid,
@@ -377,11 +466,29 @@ router.get(
           COALESCE(rs.dropout, 0) AS dropout,
           rs.last_updated
         FROM recruiter r
-        LEFT JOIN (${recruiterStatsSubquery}) rs ON rs.recruiter_rid = r.rid
+        LEFT JOIN (
+          SELECT
+            rd.rid AS recruiter_rid,
+            SUM(CASE WHEN ${submittedRangeCondition} THEN 1 ELSE 0 END) AS submitted,
+            SUM(CASE WHEN jrs.selection_status = 'verified' AND ${statusRangeCondition} THEN 1 ELSE 0 END) AS verified,
+            SUM(CASE WHEN jrs.selection_status = 'walk_in' AND ${statusRangeCondition} THEN 1 ELSE 0 END) AS walk_in,
+            SUM(CASE WHEN jrs.selection_status = 'selected' AND ${statusRangeCondition} THEN 1 ELSE 0 END) AS selected,
+            SUM(CASE WHEN jrs.selection_status = 'rejected' AND ${statusRangeCondition} THEN 1 ELSE 0 END) AS rejected,
+            SUM(CASE WHEN jrs.selection_status = 'joined' AND ${statusRangeCondition} THEN 1 ELSE 0 END) AS joined,
+            SUM(CASE WHEN jrs.selection_status = 'dropout' AND ${statusRangeCondition} THEN 1 ELSE 0 END) AS dropout,
+            MAX(CASE WHEN ${activityRangeCondition} THEN COALESCE(jrs.selected_at, rd.uploaded_at) ELSE NULL END) AS last_updated,
+            MIN(CASE WHEN ${submittedRangeCondition} THEN rd.uploaded_at ELSE NULL END) AS created_at
+          FROM resumes_data rd
+          LEFT JOIN job_resume_selection jrs
+            ON jrs.job_jid = rd.job_jid
+           AND jrs.res_id = rd.res_id
+          WHERE COALESCE(rd.submitted_by_role, 'recruiter') = 'recruiter'
+          GROUP BY rd.rid
+        ) rs ON rs.recruiter_rid = r.rid
         WHERE r.rid = ?
           AND LOWER(TRIM(COALESCE(r.role, 'recruiter'))) = 'recruiter'
         LIMIT 1`,
-        [rid]
+        statsQueryParams
       );
 
       if (recruiterRows.length === 0) {
@@ -412,9 +519,10 @@ router.get(
         LEFT JOIN jobs j ON j.jid = rd.job_jid
         WHERE rd.rid = ?
           AND COALESCE(rd.submitted_by_role, 'recruiter') = 'recruiter'
+          ${hasDateRange ? "AND rd.uploaded_at >= ? AND rd.uploaded_at < ?" : ""}
         ORDER BY rd.uploaded_at DESC
         LIMIT 10`,
-        [rid]
+        hasDateRange ? [rid, startDateTime, endExclusiveDateTime] : [rid]
       );
 
       const stats = mapStats(recruiterRow);
@@ -428,6 +536,7 @@ router.get(
         },
         stats,
         accessibleJobsCount: Number(accessibleJobsCountRow?.total) || 0,
+        dateRange: hasDateRange ? { startDate, endDate } : null,
         recentSubmissions: recentRows.map((row) => ({
           job:
             row.roleName && row.companyName

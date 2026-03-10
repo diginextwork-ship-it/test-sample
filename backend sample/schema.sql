@@ -63,8 +63,6 @@ CREATE TABLE IF NOT EXISTS applications (
   latest_education_level VARCHAR(100) NOT NULL,
   board_university VARCHAR(190) NOT NULL,
   institution_name VARCHAR(190) NOT NULL,
-  grading_system VARCHAR(40) NOT NULL,
-  score VARCHAR(40) NOT NULL,
   age INT NOT NULL,
   resume_filename VARCHAR(255) NULL,
   resume_parsed_data JSON NULL,
@@ -76,6 +74,11 @@ CREATE TABLE IF NOT EXISTS applications (
     FOREIGN KEY (job_jid) REFERENCES jobs(jid)
     ON UPDATE CASCADE ON DELETE CASCADE
 );
+
+ALTER TABLE applications
+  DROP COLUMN IF EXISTS grading_system;
+ALTER TABLE applications
+  DROP COLUMN IF EXISTS score;
 
 CREATE TABLE IF NOT EXISTS recruiter_candidate_clicks (
   id INT AUTO_INCREMENT PRIMARY KEY,

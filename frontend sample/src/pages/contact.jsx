@@ -1,9 +1,13 @@
 import "../styles/contactus.css";
+import PageBackButton from "../components/PageBackButton";
 
-export default function Contact() {
+export default function Contact({ setCurrentPage }) {
   return (
     <main className="contactus-page ui-page">
       <section className="contactus-container ui-shell">
+        <div className="ui-page-back">
+          <PageBackButton setCurrentPage={setCurrentPage} />
+        </div>
         <div className="contactus-header">
           <h1>contact us</h1>
           <p>Choose the fastest way to reach our team.</p>

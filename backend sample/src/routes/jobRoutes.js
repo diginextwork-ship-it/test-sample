@@ -147,12 +147,6 @@ const buildAutofillFromParsedData = (parsedData) => {
       "school_name",
       "school"
     ),
-    gradingSystem: pickFromEducation(
-      "grading_system",
-      "gradingSystem",
-      "grade_type"
-    ),
-    score: pickFromEducation("score", "percentage", "gpa"),
     age: derivedAge,
   };
 };
@@ -1163,15 +1157,13 @@ router.post("/api/applications", async (req, res) => {
     }
     const autofill = buildAutofillFromParsedData(parsed.parsedData);
 
-    const {
+  const {
       name,
       phone,
       email,
       latestEducationLevel,
       boardUniversity,
       institutionName,
-      gradingSystem,
-      score,
       age,
     } = mergedBody;
 
@@ -1183,8 +1175,6 @@ router.post("/api/applications", async (req, res) => {
     ).trim();
     const finalBoardUniversity = String(boardUniversity || autofill.boardUniversity || "").trim();
     const finalInstitutionName = String(institutionName || autofill.institutionName || "").trim();
-    const finalGradingSystem = String(gradingSystem || autofill.gradingSystem || "").trim();
-    const finalScore = String(score ?? autofill.score ?? "").trim();
     const finalAge = toNumberOrNull(age ?? autofill.age);
     const parsedApplicantName = extractApplicantName(parsed.parsedData) || finalName || null;
 
@@ -1195,13 +1185,11 @@ router.post("/api/applications", async (req, res) => {
       !finalLatestEducationLevel ||
       !finalBoardUniversity ||
       !finalInstitutionName ||
-      !finalGradingSystem ||
-      !finalScore ||
       finalAge === null
     ) {
       return res.status(400).json({
         message:
-          "jid, name, phone, email, latestEducationLevel, boardUniversity, institutionName, gradingSystem, score, and age are required.",
+          "jid, name, phone, email, latestEducationLevel, boardUniversity, institutionName, and age are required.",
       });
     }
 
@@ -1241,8 +1229,6 @@ router.post("/api/applications", async (req, res) => {
             latest_education_level,
             board_university,
             institution_name,
-            grading_system,
-            score,
             age,
             resume_filename,
             resume_parsed_data,
@@ -1250,7 +1236,7 @@ router.post("/api/applications", async (req, res) => {
             ats_match_percentage,
             ats_raw_json
           )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           safeJobId,
           finalName,
@@ -1259,8 +1245,6 @@ router.post("/api/applications", async (req, res) => {
           finalLatestEducationLevel,
           finalBoardUniversity,
           finalInstitutionName,
-          finalGradingSystem,
-          finalScore,
           finalAge,
           normalizedFilename,
           safeJsonOrNull(parsed.parsedData),

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import "../styles/job-application.css";
 import { API_BASE_URL, BACKEND_CONNECTION_ERROR } from "../config/api";
+import PageBackButton from "../components/PageBackButton";
 
 const initialFormData = {
   name: "",
@@ -9,8 +10,6 @@ const initialFormData = {
   latestEducationLevel: "",
   boardUniversity: "",
   institutionName: "",
-  gradingSystem: "",
-  score: "",
   age: "",
 };
 
@@ -97,8 +96,6 @@ export default function JobApplication({ setCurrentPage }) {
         latestEducationLevel: autofill.latestEducationLevel || prev.latestEducationLevel,
         boardUniversity: autofill.boardUniversity || prev.boardUniversity,
         institutionName: autofill.institutionName || prev.institutionName,
-        gradingSystem: autofill.gradingSystem || prev.gradingSystem,
-        score: autofill.score || prev.score,
         age: autofill.age || prev.age,
       }));
 
@@ -232,6 +229,9 @@ export default function JobApplication({ setCurrentPage }) {
   return (
     <main className="job-application-page ui-page">
       <section className="job-application-shell ui-shell">
+        <div className="ui-page-back">
+          <PageBackButton setCurrentPage={setCurrentPage} fallbackPage="jobs" />
+        </div>
         <div className="job-application-card">
           <h1>Job application form</h1>
           <p>Complete the form below to submit your application.</p>
@@ -360,38 +360,6 @@ export default function JobApplication({ setCurrentPage }) {
             </div>
 
             <div className="application-field">
-              <label htmlFor="gradingSystem">Grading system *</label>
-              <select
-                id="gradingSystem"
-                name="gradingSystem"
-                value={formData.gradingSystem}
-                onChange={handleChange}
-                required
-              >
-                <option value="">Select grading system</option>
-                <option value="percentage">Percentage (out of 100)</option>
-                <option value="gpa">GPA (out of 10)</option>
-              </select>
-            </div>
-
-            <div className="application-field">
-              <label htmlFor="score">Enter your score *</label>
-              <input
-                id="score"
-                name="score"
-                type="text"
-                value={formData.score}
-                onChange={handleChange}
-                placeholder={
-                  formData.gradingSystem === "gpa"
-                    ? "Enter GPA out of 10"
-                    : "Enter percentage out of 100"
-                }
-                required
-              />
-            </div>
-
-            <div className="application-field">
               <label htmlFor="applicantAge">Age *</label>
               <input
                 id="applicantAge"
@@ -409,13 +377,6 @@ export default function JobApplication({ setCurrentPage }) {
             <div className="application-actions">
               <button type="submit" className="apply-submit-btn" disabled={isSubmitting}>
                 {isSubmitting ? "Submitting..." : "Submit Application"}
-              </button>
-              <button
-                type="button"
-                className="application-back-btn"
-                onClick={() => setCurrentPage("jobs")}
-              >
-                Back to jobs
               </button>
             </div>
           </form>

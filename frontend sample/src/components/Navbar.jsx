@@ -57,6 +57,17 @@ export default function Navbar({ setCurrentPage, currentPage }) {
             </a>
 
             <a
+              href="/gallery"
+              className="nav-link"
+              onClick={(e) => {
+                e.preventDefault();
+                handleNavClick("gallery");
+              }}
+            >
+              Gallery
+            </a>
+
+            <a
               href="/contactus"
               className="nav-link"
               onClick={(e) => {

@@ -139,6 +139,10 @@
   align-items: stretch;
 }
 
+.about-founder-grid-director {
+  margin-top: 1.1rem;
+}
+
 .founder-photo-slot {
   min-height: 300px;
   border-radius: 1.2rem;
@@ -304,6 +308,7 @@
   .milestone-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
 }
 
 @media (max-width: 640px) {

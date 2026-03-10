@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import "../styles/job-search.css";
+import PageBackButton from "../components/PageBackButton";
 import {
   BACKEND_CONNECTION_ERROR,
   buildApiUrl,
@@ -123,6 +124,9 @@ export default function JobSearch({ setCurrentPage }) {
   return (
     <main className="job-search-page ui-page">
       <section className="job-search-shell ui-shell">
+        <div className="ui-page-back">
+          <PageBackButton setCurrentPage={setCurrentPage} />
+        </div>
         <div className="job-search-topbar">
           <div className="search-field">
             <span className="search-icon" aria-hidden="true">

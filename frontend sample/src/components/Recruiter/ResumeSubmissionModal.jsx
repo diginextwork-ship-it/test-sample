@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { checkRecruiterJobAccess, submitRecruiterResume } from "../../services/jobAccessService";
+import { API_BASE_URL, BACKEND_CONNECTION_ERROR } from "../../config/api";
 
 const initialFormState = {
   candidate_name: "",
@@ -8,8 +9,6 @@ const initialFormState = {
   latest_education_level: "",
   board_university: "",
   institution_name: "",
-  grading_system: "",
-  score: "",
   age: "",
   resume_file: null,
 };
@@ -20,6 +19,9 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
   const [hasAccess, setHasAccess] = useState(null);
   const [checkingAccess, setCheckingAccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isParsingResume, setIsParsingResume] = useState(false);
+  const [parseMessage, setParseMessage] = useState("");
+  const [parseMessageType, setParseMessageType] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [formData, setFormData] = useState(initialFormState);
 
@@ -56,6 +58,9 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
       setHasAccess(null);
       setCheckingAccess(false);
       setSubmitting(false);
+      setIsParsingResume(false);
+      setParseMessage("");
+      setParseMessageType("");
       setErrorMessage("");
     }
   }, [isOpen]);
@@ -75,6 +80,82 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
       return "Resume file size must be 5MB or less.";
     }
     return "";
+  };
+
+  const fileToDataUrl = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Failed to read resume file."));
+      reader.readAsDataURL(file);
+    });
+
+  const parseResumeAndAutofill = async (file) => {
+    if (!file || !jobId) return;
+
+    setIsParsingResume(true);
+    setParseMessage("");
+    setParseMessageType("");
+
+    try {
+      const resumeBase64 = await fileToDataUrl(file);
+      const response = await fetch(`${API_BASE_URL}/api/applications/parse-resume`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          jid: Number(jobId),
+          resumeBase64,
+          resumeFilename: file.name,
+          resumeMimeType: file.type,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message || "Failed to parse resume.");
+      }
+
+      const autofill = data?.autofill || {};
+      setFormData((prev) => ({
+        ...prev,
+        candidate_name: autofill.name || prev.candidate_name,
+        phone: String(autofill.phone || prev.phone).replace(/\D/g, "").slice(0, 10),
+        email: autofill.email || prev.email,
+        latest_education_level: autofill.latestEducationLevel || prev.latest_education_level,
+        board_university: autofill.boardUniversity || prev.board_university,
+        institution_name: autofill.institutionName || prev.institution_name,
+        age: autofill.age || prev.age,
+      }));
+      setParseMessageType("success");
+      setParseMessage("Resume parsed and form auto-filled successfully.");
+    } catch (error) {
+      setParseMessageType("error");
+      if (error instanceof TypeError) {
+        setParseMessage(BACKEND_CONNECTION_ERROR);
+      } else {
+        setParseMessage(error.message || "Resume parsing failed.");
+      }
+    } finally {
+      setIsParsingResume(false);
+    }
+  };
+
+  const handleResumeFileChange = async (event) => {
+    const file = event.target.files?.[0] || null;
+    setErrorMessage("");
+    setParseMessage("");
+    setParseMessageType("");
+    setField("resume_file", file);
+
+    if (!file) return;
+    const fileError = validateFile(file);
+    if (fileError) {
+      setErrorMessage(fileError);
+      return;
+    }
+    await parseResumeAndAutofill(file);
   };
 
   const handleSubmit = async (event) => {
@@ -175,23 +256,6 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
               onChange={(event) => setField("institution_name", event.target.value)}
               required
             />
-            <select
-              value={formData.grading_system}
-              onChange={(event) => setField("grading_system", event.target.value)}
-              required
-            >
-              <option value="">Grading System</option>
-              <option value="Percentage">Percentage</option>
-              <option value="CGPA">CGPA</option>
-              <option value="GPA">GPA</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Score"
-              value={formData.score}
-              onChange={(event) => setField("score", event.target.value)}
-              required
-            />
             <input
               type="number"
               min="18"
@@ -204,9 +268,15 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
             <input
               type="file"
               accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              onChange={(event) => setField("resume_file", event.target.files?.[0] || null)}
+              onChange={handleResumeFileChange}
               required
             />
+            {isParsingResume ? <p>Parsing resume and calculating ATS...</p> : null}
+            {parseMessage ? (
+              <p className={parseMessageType === "success" ? "job-message" : "job-message job-message-error"}>
+                {parseMessage}
+              </p>
+            ) : null}
 
             <div className="resume-modal-actions">
               <button type="submit" className="btn-primary" disabled={submitting}>

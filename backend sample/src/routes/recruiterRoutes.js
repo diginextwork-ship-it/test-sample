@@ -1,7 +1,7 @@
 const express = require("express");
 const multer = require("multer");
 const pool = require("../config/db");
-const { extractResumeAts } = require("../resumeparser/service");
+const { extractResumeAts, parseResumeWithAts, extractApplicantName } = require("../resumeparser/service");
 const {
   createAuthToken,
   requireAuth,
@@ -80,6 +80,119 @@ const toNonNegativeInt = (value, fallback) => {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) return fallback;
   return parsed;
+};
+
+const toNumberOrNull = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const safeJsonOrNull = (value) => {
+  if (value === undefined || value === null) return null;
+  return JSON.stringify(value);
+};
+
+const normalizePhoneForStorage = (phone) => {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length === 10) return digits;
+  if (digits.length > 10) return digits.slice(-10);
+  return digits;
+};
+
+const buildAutofillFromParsedData = (parsedData) => {
+  const safeData =
+    parsedData && typeof parsedData === "object" && !Array.isArray(parsedData) ? parsedData : {};
+  const educationCandidates = Array.isArray(safeData.education)
+    ? safeData.education.filter((item) => item && typeof item === "object")
+    : safeData.education && typeof safeData.education === "object"
+    ? [safeData.education]
+    : [];
+
+  const pickString = (...values) => {
+    for (const value of values) {
+      const candidate = value === undefined || value === null ? "" : String(value).trim();
+      if (candidate) return candidate;
+    }
+    return "";
+  };
+
+  const pickFromEducation = (...keys) => {
+    for (const education of educationCandidates) {
+      for (const key of keys) {
+        const candidate = pickString(education[key]);
+        if (candidate) return candidate;
+      }
+    }
+    return "";
+  };
+
+  const toAgeFromDob = (dobValue) => {
+    const dobText = pickString(dobValue);
+    if (!dobText) return "";
+    const dob = new Date(dobText);
+    if (Number.isNaN(dob.getTime())) return "";
+    const now = new Date();
+    let ageYears = now.getFullYear() - dob.getFullYear();
+    const monthDiff = now.getMonth() - dob.getMonth();
+    const dayDiff = now.getDate() - dob.getDate();
+    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+      ageYears -= 1;
+    }
+    if (ageYears < 16 || ageYears > 100) return "";
+    return String(ageYears);
+  };
+
+  const ageValue = pickString(safeData.age, safeData.current_age);
+  const derivedAge = ageValue || toAgeFromDob(safeData.dob || safeData.date_of_birth);
+
+  return {
+    name: pickString(safeData.full_name, safeData.fullName, safeData.name),
+    phone: normalizePhoneForStorage(pickString(safeData.phone, safeData.phone_number)),
+    email: pickString(safeData.email, safeData.mail).toLowerCase(),
+    latestEducationLevel: pickFromEducation(
+      "latest_education_level",
+      "latestEducationLevel",
+      "education_level",
+      "degree",
+      "qualification"
+    ),
+    boardUniversity: pickFromEducation(
+      "board_university",
+      "boardUniversity",
+      "university",
+      "university_name",
+      "board"
+    ),
+    institutionName: pickFromEducation(
+      "institution_name",
+      "institutionName",
+      "college_name",
+      "college",
+      "school_name",
+      "school"
+    ),
+    age: derivedAge,
+  };
+};
+
+const buildJobAtsContext = (jobRow) => {
+  if (!jobRow || typeof jobRow !== "object") return "";
+  const parts = [
+    `Role: ${String(jobRow.role_name || "").trim()}`,
+    `Company: ${String(jobRow.company_name || "").trim()}`,
+    `Job Description: ${String(jobRow.job_description || "").trim()}`,
+    `Required Skills: ${String(jobRow.skills || "").trim()}`,
+    `Qualification: ${String(jobRow.qualification || "").trim()}`,
+    `Benefits: ${String(jobRow.benefits || "").trim()}`,
+    `Experience: ${String(jobRow.experience || "").trim()}`,
+    `Location: ${[jobRow.city, jobRow.state, jobRow.pincode]
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+      .join(", ")}`,
+  ];
+
+  return parts.filter((line) => !line.endsWith(":")).join("\n");
 };
 
 const escapeLike = (value) => String(value || "").replace(/[\\%_]/g, "\\$&");
@@ -640,51 +753,6 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
       });
     }
 
-    const requiredFields = [
-      "candidate_name",
-      "phone",
-      "email",
-      "latest_education_level",
-      "board_university",
-      "institution_name",
-      "grading_system",
-      "score",
-      "age",
-    ];
-
-    for (const field of requiredFields) {
-      if (!String(req.body?.[field] || "").trim()) {
-        return res.status(400).json({
-          success: false,
-          error: `${field} is required.`,
-        });
-      }
-    }
-
-    const email = String(req.body?.email || "").trim().toLowerCase();
-    const phone = String(req.body?.phone || "").trim();
-    const candidateName = String(req.body?.candidate_name || "").trim();
-    const latestEducationLevel = String(req.body?.latest_education_level || "").trim();
-    const boardUniversity = String(req.body?.board_university || "").trim();
-    const institutionName = String(req.body?.institution_name || "").trim();
-    const gradingSystem = String(req.body?.grading_system || "").trim();
-    const score = String(req.body?.score || "").trim();
-    const age = Number(req.body?.age);
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({
-        success: false,
-        error: "email must be valid.",
-      });
-    }
-
-    if (!Number.isFinite(age) || age < 18 || age > 100) {
-      return res.status(400).json({
-        success: false,
-        error: "age must be between 18 and 100.",
-      });
-    }
-
     const resumeFile = req.file;
     if (!resumeFile || !resumeFile.buffer || resumeFile.buffer.length === 0) {
       return res.status(400).json({
@@ -708,6 +776,93 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
       });
     }
 
+    const [jobRows] = await pool.query(
+      `SELECT
+        jid,
+        role_name,
+        company_name,
+        job_description,
+        skills,
+        qualification,
+        benefits,
+        experience,
+        city,
+        state,
+        pincode
+      FROM jobs
+      WHERE jid = ?
+      LIMIT 1`,
+      [safeJobId]
+    );
+    if (jobRows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "Job not found.",
+      });
+    }
+
+    const parsed = await parseResumeWithAts({
+      resumeBuffer: resumeFile.buffer,
+      resumeFilename: originalName,
+      jobDescription: buildJobAtsContext(jobRows[0]),
+    });
+    if (!parsed.ok) {
+      return res.status(503).json({
+        success: false,
+        error: parsed.message,
+      });
+    }
+
+    const autofill = buildAutofillFromParsedData(parsed.parsedData);
+    const candidateName = String(
+      req.body?.candidate_name || autofill.name || extractApplicantName(parsed.parsedData) || ""
+    ).trim();
+    const phone = normalizePhoneForStorage(req.body?.phone || autofill.phone || "");
+    const email = String(req.body?.email || autofill.email || "").trim().toLowerCase();
+    const latestEducationLevel = String(
+      req.body?.latest_education_level || autofill.latestEducationLevel || ""
+    ).trim();
+    const boardUniversity = String(req.body?.board_university || autofill.boardUniversity || "").trim();
+    const institutionName = String(req.body?.institution_name || autofill.institutionName || "").trim();
+    const age = toNumberOrNull(req.body?.age ?? autofill.age);
+
+    if (
+      !candidateName ||
+      !phone ||
+      !email ||
+      !latestEducationLevel ||
+      !boardUniversity ||
+      !institutionName ||
+      age === null
+    ) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "Resume parsing could not fill all required fields. Please provide candidate_name, phone, email, latest_education_level, board_university, institution_name, and age.",
+      });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: "email must be valid.",
+      });
+    }
+
+    if (!/^\d{10}$/.test(phone)) {
+      return res.status(400).json({
+        success: false,
+        error: "phone must be exactly 10 digits.",
+      });
+    }
+
+    if (!Number.isFinite(age) || age < 18 || age > 100) {
+      return res.status(400).json({
+        success: false,
+        error: "age must be between 18 and 100.",
+      });
+    }
+
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
@@ -726,12 +881,14 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
             latest_education_level,
             board_university,
             institution_name,
-            grading_system,
-            score,
             age,
-            resume_filename
+            resume_filename,
+            resume_parsed_data,
+            ats_score,
+            ats_match_percentage,
+            ats_raw_json
           )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           safeJobId,
           candidateName,
@@ -740,10 +897,17 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
           latestEducationLevel,
           boardUniversity,
           institutionName,
-          gradingSystem,
-          score,
           age,
           originalName,
+          safeJsonOrNull(parsed.parsedData),
+          parsed.atsScore,
+          parsed.atsMatchPercentage,
+          safeJsonOrNull({
+            ats_score: parsed.atsScore,
+            ats_match_percentage: parsed.atsMatchPercentage,
+            ats_details: parsed.atsRawJson,
+            parsed_data: parsed.parsedData,
+          }),
         ]
       );
 
@@ -757,9 +921,12 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
             resume,
             resume_filename,
             resume_type,
-            submitted_by_role
+            submitted_by_role,
+            ats_score,
+            ats_match_percentage,
+            ats_raw_json
           )
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'recruiter')`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'recruiter', ?, ?, ?)`,
         [
           resId,
           recruiterRid,
@@ -768,6 +935,14 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
           resumeFile.buffer,
           originalName,
           validation.extension,
+          parsed.atsScore,
+          parsed.atsMatchPercentage,
+          safeJsonOrNull({
+            ats_score: parsed.atsScore,
+            ats_match_percentage: parsed.atsMatchPercentage,
+            ats_details: parsed.atsRawJson,
+            parsed_data: parsed.parsedData,
+          }),
         ]
       );
 
@@ -793,6 +968,8 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
         success: true,
         message: "Resume submitted successfully",
         resumeId: resId,
+        atsScore: parsed.atsScore,
+        atsMatchPercentage: parsed.atsMatchPercentage,
         submittedCount: Number(statusRows?.[0]?.submittedCount) || 0,
       });
     } catch (error) {
@@ -863,7 +1040,21 @@ router.post(
     }
 
     const [jobRows] = await pool.query(
-      "SELECT jid, job_description AS jobDescription FROM jobs WHERE jid = ? LIMIT 1",
+      `SELECT
+        jid,
+        role_name,
+        company_name,
+        job_description,
+        skills,
+        qualification,
+        benefits,
+        experience,
+        city,
+        state,
+        pincode
+      FROM jobs
+      WHERE jid = ?
+      LIMIT 1`,
       [safeJobId]
     );
     if (jobRows.length === 0) {
@@ -899,7 +1090,7 @@ router.post(
         ? await extractResumeAts({
           resumeBuffer,
           resumeFilename: normalizedFilename,
-          jobDescription: jobRows[0].jobDescription,
+          jobDescription: buildJobAtsContext(jobRows[0]),
         })
         : {
             atsScore: null,

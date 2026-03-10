@@ -116,6 +116,32 @@
   margin-top: 1.5rem;
 }
 
+.ui-page-back {
+  margin-bottom: 1rem;
+}
+
+.ui-page-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--charcoal);
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1;
+  min-height: 40px;
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.ui-page-back-btn:hover {
+  background: #f5f5f5;
+  transform: translateY(-1px);
+}
+
 .ui-title-sm {
   margin-bottom: 0.5rem;
 }
@@ -145,6 +171,16 @@ video {
 
   .ui-btn-primary {
     width: 100%;
+  }
+
+  .ui-page-back {
+    margin-bottom: 0.75rem;
+  }
+
+  .ui-page-back-btn {
+    min-height: 38px;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.9rem;
   }
 
   .ui-table th,

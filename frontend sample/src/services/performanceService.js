@@ -46,12 +46,18 @@ export const fetchAllRecruiterStatuses = ({ sortBy = "submitted", sortOrder = "d
 export const fetchJobAdderDashboard = () =>
   request(`${API_BASE_URL}/api/dashboard/job-adder`, {}, "Failed to fetch job adder dashboard.");
 
-export const fetchRecruiterDashboard = (rid) =>
-  request(
-    `${API_BASE_URL}/api/dashboard/recruiter/${encodeURIComponent(rid)}`,
+export const fetchRecruiterDashboard = (rid, { startDate = "", endDate = "" } = {}) => {
+  const params = new URLSearchParams();
+  if (String(startDate || "").trim()) params.set("startDate", String(startDate).trim());
+  if (String(endDate || "").trim()) params.set("endDate", String(endDate).trim());
+  const query = params.toString();
+
+  return request(
+    `${API_BASE_URL}/api/dashboard/recruiter/${encodeURIComponent(rid)}${query ? `?${query}` : ""}`,
     {},
     "Failed to fetch recruiter dashboard."
   );
+};
 
 export const fetchJobResumeStatuses = (jobId) =>
   request(

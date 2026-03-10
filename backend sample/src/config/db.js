@@ -323,6 +323,14 @@ const ensureApplicationColumns = async () => {
 
   if (!hasApplicationsTable) return;
 
+  if (await columnExists("applications", "grading_system")) {
+    await pool.query("ALTER TABLE applications DROP COLUMN grading_system");
+  }
+
+  if (await columnExists("applications", "score")) {
+    await pool.query("ALTER TABLE applications DROP COLUMN score");
+  }
+
   if (!(await columnExists("applications", "resume_filename"))) {
     await pool.query(
       "ALTER TABLE applications ADD COLUMN resume_filename VARCHAR(255) NULL",

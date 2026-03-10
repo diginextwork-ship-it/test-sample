@@ -1,12 +1,13 @@
 import { useRef, useState } from "react";
 import emailjs from "@emailjs/browser";
 import "../styles/schedule-call.css";
+import PageBackButton from "../components/PageBackButton";
 
 const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
 const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
 const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
 
-export default function ScheduleCall() {
+export default function ScheduleCall({ setCurrentPage }) {
   const formRef = useRef(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState({ type: "", message: "" });
@@ -52,6 +53,9 @@ export default function ScheduleCall() {
   return (
     <main className="schedule-call-page ui-page">
       <section className="schedule-call-container ui-shell">
+        <div className="ui-page-back">
+          <PageBackButton setCurrentPage={setCurrentPage} />
+        </div>
         <div className="schedule-call-header">
           <h1>schedule a call</h1>
           <p>Share your details and resume, and our team will reach out.</p>
