@@ -92,6 +92,17 @@ const getColumnMetadata = async (tableName, columnName) => {
   return rows[0] || null;
 };
 
+const constraintExists = async (tableName, constraintName) => {
+  const [rows] = await pool.query(
+    `SELECT 1
+     FROM information_schema.table_constraints
+     WHERE table_schema = DATABASE() AND table_name = ? AND constraint_name = ?
+     LIMIT 1`,
+    [tableName, constraintName]
+  );
+  return rows.length > 0;
+};
+
 const ensureMoneySumTable = async () => {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS money_sum (
@@ -153,6 +164,73 @@ const ensureMoneySumTable = async () => {
       "ALTER TABLE money_sum ADD COLUMN id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST"
     );
   }
+
+  await pool.query(
+    "ALTER TABLE money_sum MODIFY COLUMN id BIGINT NOT NULL AUTO_INCREMENT"
+  );
+};
+
+const ensureRecruiterAttendanceTable = async () => {
+  await ensureMoneySumTable();
+
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS recruiter_attendance (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      recruiter_rid VARCHAR(20) NOT NULL,
+      attendance_date DATE NOT NULL,
+      status ENUM('present', 'absent', 'half_day') NOT NULL DEFAULT 'absent',
+      salary_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+      money_sum_id BIGINT NULL,
+      marked_by VARCHAR(50) NOT NULL DEFAULT 'admin',
+      marked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_recruiter_attendance_day (recruiter_rid, attendance_date),
+      INDEX idx_recruiter_attendance_date_status (attendance_date, status),
+      INDEX idx_recruiter_attendance_money_sum_id (money_sum_id),
+      CONSTRAINT fk_recruiter_attendance_recruiter
+        FOREIGN KEY (recruiter_rid) REFERENCES recruiter(rid)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      CONSTRAINT fk_recruiter_attendance_money_sum
+        FOREIGN KEY (money_sum_id) REFERENCES money_sum(id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+    )`
+  );
+
+  if (!(await columnExists("recruiter_attendance", "salary_amount"))) {
+    await pool.query(
+      "ALTER TABLE recruiter_attendance ADD COLUMN salary_amount DECIMAL(12,2) NOT NULL DEFAULT 0"
+    );
+  }
+  if (!(await columnExists("recruiter_attendance", "money_sum_id"))) {
+    await pool.query("ALTER TABLE recruiter_attendance ADD COLUMN money_sum_id BIGINT NULL");
+  }
+  await pool.query(
+    "ALTER TABLE recruiter_attendance MODIFY COLUMN money_sum_id BIGINT NULL"
+  );
+  if (!(await columnExists("recruiter_attendance", "marked_by"))) {
+    await pool.query(
+      "ALTER TABLE recruiter_attendance ADD COLUMN marked_by VARCHAR(50) NOT NULL DEFAULT 'admin'"
+    );
+  }
+  if (!(await columnExists("recruiter_attendance", "marked_at"))) {
+    await pool.query(
+      "ALTER TABLE recruiter_attendance ADD COLUMN marked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+    );
+  }
+  if (!(await columnExists("recruiter_attendance", "updated_at"))) {
+    await pool.query(
+      "ALTER TABLE recruiter_attendance ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+    );
+  }
+
+  if (!(await constraintExists("recruiter_attendance", "fk_recruiter_attendance_money_sum"))) {
+    await pool.query(
+      `ALTER TABLE recruiter_attendance
+       ADD CONSTRAINT fk_recruiter_attendance_money_sum
+       FOREIGN KEY (money_sum_id) REFERENCES money_sum(id)
+       ON UPDATE CASCADE ON DELETE SET NULL`
+    );
+  }
 };
 
 const isAdminAuthorized = (req) => {
@@ -175,6 +253,47 @@ const toMoneyNumber = (value) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
   return Math.round(parsed * 100) / 100;
+};
+
+const normalizeAttendanceStatus = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "present") return "present";
+  if (normalized === "absent") return "absent";
+  if (normalized === "half_day" || normalized === "half-day" || normalized === "half day") {
+    return "half_day";
+  }
+  return "";
+};
+
+const normalizeAttendanceDate = (value) => {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return new Date().toISOString().slice(0, 10);
+  }
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : "";
+};
+
+const normalizeStaffRole = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "team_leader") return "team leader";
+  if (normalized === "job creator") return "team leader";
+  if (normalized === "team leader") return "team leader";
+  return "recruiter";
+};
+
+const calculateAttendanceExpense = (status, dailySalary) => {
+  const safeDailySalary = toMoneyNumber(dailySalary);
+  if (status === "present") return safeDailySalary;
+  if (status === "half_day") return Math.round((safeDailySalary / 2) * 100) / 100;
+  return 0;
+};
+
+const buildAttendanceReason = ({ recruiterRid, recruiterName, attendanceDate, status }) => {
+  const label = String(recruiterName || "").trim();
+  const suffix = status === "half_day" ? "half day" : status;
+  return label
+    ? `attendance salary - ${attendanceDate} - ${recruiterRid} (${label}) - ${suffix}`
+    : `attendance salary - ${attendanceDate} - ${recruiterRid} - ${suffix}`;
 };
 
 const normalizeRevenueEntryType = (value) => {
@@ -849,6 +968,260 @@ router.get("/api/admin/jobs/:jid/selection-summary", async (req, res) => {
   }
 });
 
+router.get("/api/admin/attendance", async (req, res) => {
+  if (!ensureAdminAuthorized(req, res)) return;
+
+  const attendanceDate = normalizeAttendanceDate(req.query?.date);
+  if (!attendanceDate) {
+    return res.status(400).json({ message: "date must be in YYYY-MM-DD format." });
+  }
+
+  try {
+    await ensureRecruiterAttendanceTable();
+
+    const [rows] = await pool.query(
+      `SELECT
+        r.rid,
+        r.name,
+        CASE
+          WHEN LOWER(TRIM(COALESCE(r.role, 'recruiter'))) IN ('team leader', 'team_leader', 'job creator') THEN 'team leader'
+          ELSE 'recruiter'
+        END AS role,
+        COALESCE(
+          r.daily_salary,
+          ROUND(r.monthly_salary / 30, 2),
+          CASE
+            WHEN TRIM(COALESCE(r.salary, '')) REGEXP '^[0-9]+(\\.[0-9]+)?$'
+              THEN ROUND(CAST(TRIM(r.salary) AS DECIMAL(12,2)) / 30, 2)
+            ELSE 0
+          END
+        ) AS dailySalary,
+        ra.id AS attendanceId,
+        ra.status,
+        ra.salary_amount AS salaryAmount,
+        ra.money_sum_id AS moneySumId,
+        ra.marked_by AS markedBy,
+        ra.marked_at AS markedAt,
+        ra.updated_at AS updatedAt
+      FROM recruiter r
+      LEFT JOIN recruiter_attendance ra
+        ON ra.recruiter_rid = r.rid
+       AND ra.attendance_date = ?
+      WHERE LOWER(TRIM(COALESCE(r.role, 'recruiter'))) IN ('recruiter', 'team leader', 'team_leader', 'job creator')
+      ORDER BY
+        CASE
+          WHEN LOWER(TRIM(COALESCE(r.role, 'recruiter'))) IN ('team leader', 'team_leader', 'job creator') THEN 0
+          ELSE 1
+        END,
+        r.name ASC,
+        r.rid ASC`,
+      [attendanceDate]
+    );
+
+    const staff = rows.map((row) => {
+      const status = normalizeAttendanceStatus(row.status) || "absent";
+      const dailySalary = toMoneyNumber(row.dailySalary);
+      const salaryAmount = toMoneyNumber(row.salaryAmount);
+      return {
+        attendanceId: row.attendanceId ? Number(row.attendanceId) : null,
+        rid: row.rid,
+        name: row.name,
+        role: normalizeStaffRole(row.role),
+        dailySalary,
+        status,
+        salaryAmount,
+        moneySumId: row.moneySumId ? Number(row.moneySumId) : null,
+        markedBy: row.markedBy || null,
+        markedAt: row.markedAt || null,
+        updatedAt: row.updatedAt || null,
+      };
+    });
+
+    const summary = staff.reduce(
+      (accumulator, member) => {
+        accumulator.totalStaff += 1;
+        accumulator.dailyExpense =
+          Math.round((accumulator.dailyExpense + toMoneyNumber(member.salaryAmount)) * 100) / 100;
+        if (member.status === "present") accumulator.presentCount += 1;
+        else if (member.status === "half_day") accumulator.halfDayCount += 1;
+        else accumulator.absentCount += 1;
+        return accumulator;
+      },
+      {
+        totalStaff: 0,
+        presentCount: 0,
+        absentCount: 0,
+        halfDayCount: 0,
+        dailyExpense: 0,
+      }
+    );
+
+    return res.status(200).json({
+      date: attendanceDate,
+      staff,
+      summary,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch attendance.",
+      error: error.message,
+    });
+  }
+});
+
+router.put("/api/admin/attendance", async (req, res) => {
+  if (!ensureAdminAuthorized(req, res)) return;
+
+  const recruiterRid = String(req.body?.recruiterRid || "").trim();
+  const attendanceDate = normalizeAttendanceDate(req.body?.attendanceDate);
+  const status = normalizeAttendanceStatus(req.body?.status);
+  const markedBy = String(req.body?.markedBy || "admin").trim() || "admin";
+
+  if (!recruiterRid || !attendanceDate || !status) {
+    return res.status(400).json({
+      message: "recruiterRid, attendanceDate, and status are required.",
+    });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await ensureRecruiterAttendanceTable();
+    await connection.beginTransaction();
+
+    const [recruiterRows] = await connection.query(
+      `SELECT
+        rid,
+        name,
+        CASE
+          WHEN LOWER(TRIM(COALESCE(role, 'recruiter'))) IN ('team leader', 'team_leader', 'job creator') THEN 'team leader'
+          ELSE 'recruiter'
+        END AS role,
+        COALESCE(
+          daily_salary,
+          ROUND(monthly_salary / 30, 2),
+          CASE
+            WHEN TRIM(COALESCE(salary, '')) REGEXP '^[0-9]+(\\.[0-9]+)?$'
+              THEN ROUND(CAST(TRIM(salary) AS DECIMAL(12,2)) / 30, 2)
+            ELSE 0
+          END
+        ) AS dailySalary
+      FROM recruiter
+      WHERE rid = ?
+        AND LOWER(TRIM(COALESCE(role, 'recruiter'))) IN ('recruiter', 'team leader', 'team_leader', 'job creator')
+      LIMIT 1
+      FOR UPDATE`,
+      [recruiterRid]
+    );
+
+    if (recruiterRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Recruiter or team leader not found." });
+    }
+
+    const recruiter = recruiterRows[0];
+    const expenseAmount = calculateAttendanceExpense(status, recruiter.dailySalary);
+
+    const [attendanceRows] = await connection.query(
+      `SELECT id, money_sum_id AS moneySumId
+       FROM recruiter_attendance
+       WHERE recruiter_rid = ? AND attendance_date = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [recruiterRid, attendanceDate]
+    );
+
+    const existingAttendance = attendanceRows[0] || null;
+    let moneySumId = existingAttendance?.moneySumId ? Number(existingAttendance.moneySumId) : null;
+
+    if (status === "absent") {
+      if (moneySumId) {
+        await connection.query("DELETE FROM money_sum WHERE id = ?", [moneySumId]);
+        moneySumId = null;
+      }
+    } else {
+      const reason = buildAttendanceReason({
+        recruiterRid,
+        recruiterName: recruiter.name,
+        attendanceDate,
+        status,
+      });
+
+      let hasExistingMoneyRow = false;
+      if (moneySumId) {
+        const [moneyRows] = await connection.query(
+          "SELECT id FROM money_sum WHERE id = ? LIMIT 1",
+          [moneySumId]
+        );
+        hasExistingMoneyRow = moneyRows.length > 0;
+      }
+
+      if (hasExistingMoneyRow) {
+        await connection.query(
+          `UPDATE money_sum
+           SET company_rev = 0,
+               expense = ?,
+               reason = ?,
+               photo = NULL,
+               entry_type = 'expense'
+           WHERE id = ?`,
+          [expenseAmount, reason, moneySumId]
+        );
+      } else {
+        const [insertMoneySum] = await connection.query(
+          `INSERT INTO money_sum (company_rev, expense, profit, reason, photo, entry_type)
+           VALUES (0, ?, 0, ?, NULL, 'expense')`,
+          [expenseAmount, reason]
+        );
+        moneySumId = Number(insertMoneySum.insertId);
+      }
+    }
+
+    if (existingAttendance) {
+      await connection.query(
+        `UPDATE recruiter_attendance
+         SET status = ?,
+             salary_amount = ?,
+             money_sum_id = ?,
+             marked_by = ?,
+             marked_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [status, expenseAmount, moneySumId, markedBy, existingAttendance.id]
+      );
+    } else {
+      await connection.query(
+        `INSERT INTO recruiter_attendance
+          (recruiter_rid, attendance_date, status, salary_amount, money_sum_id, marked_by)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [recruiterRid, attendanceDate, status, expenseAmount, moneySumId, markedBy]
+      );
+    }
+
+    await recomputeMoneyProfit(connection);
+    await connection.commit();
+
+    return res.status(200).json({
+      message: "Attendance updated successfully.",
+      attendance: {
+        recruiterRid,
+        attendanceDate,
+        status,
+        salaryAmount: expenseAmount,
+        moneySumId,
+        role: normalizeStaffRole(recruiter.role),
+        dailySalary: toMoneyNumber(recruiter.dailySalary),
+      },
+    });
+  } catch (error) {
+    await connection.rollback();
+    return res.status(500).json({
+      message: "Failed to update attendance.",
+      error: error.message,
+    });
+  } finally {
+    connection.release();
+  }
+});
+
 router.get("/api/admin/revenue", async (req, res) => {
   if (!ensureAdminAuthorized(req, res)) return;
 
@@ -921,9 +1294,11 @@ router.get("/api/admin/recruiters/list", async (req, res) => {
 
   try {
     const hasRoleColumn = await columnExists("recruiter", "role");
-    const roleFilter = hasRoleColumn ? "WHERE LOWER(TRIM(role)) = 'recruiter'" : "";
+    const roleFilter = hasRoleColumn
+      ? "WHERE LOWER(TRIM(COALESCE(role, 'recruiter'))) IN ('recruiter', 'team leader', 'team_leader', 'job creator')"
+      : "";
     const [rows] = await pool.query(
-      `SELECT rid, name
+      `SELECT rid, name, COALESCE(role, 'recruiter') AS role
        FROM recruiter
        ${roleFilter}
        ORDER BY name ASC, rid ASC`,
@@ -933,6 +1308,7 @@ router.get("/api/admin/recruiters/list", async (req, res) => {
       recruiters: rows.map((row) => ({
         rid: row.rid,
         name: row.name,
+        role: normalizeStaffRole(row.role),
       })),
     });
   } catch (error) {

@@ -274,7 +274,7 @@ export default function AdminRevenue({ setCurrentPage }) {
             </div>
             {formData.reasonCategory === "salary" ? (
               <div>
-                <label htmlFor="recruiterRid">RID and recruiter</label>
+                <label htmlFor="recruiterRid">RID and staff member</label>
                 <select
                   id="recruiterRid"
                   name="recruiterRid"
@@ -285,7 +285,7 @@ export default function AdminRevenue({ setCurrentPage }) {
                   <option value="">Select recruiter</option>
                   {recruiters.map((recruiter) => (
                     <option key={recruiter.rid} value={recruiter.rid}>
-                      {recruiter.rid} - {recruiter.name || "Unknown"}
+                      {recruiter.rid} - {recruiter.name || "Unknown"}{recruiter.role ? ` (${recruiter.role})` : ""}
                     </option>
                   ))}
                 </select>

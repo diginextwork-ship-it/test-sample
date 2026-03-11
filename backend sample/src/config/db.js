@@ -108,6 +108,17 @@ const indexExists = async (tableName, indexName) => {
   return rows.length > 0;
 };
 
+const constraintExists = async (tableName, constraintName) => {
+  const [rows] = await pool.query(
+    `SELECT 1
+     FROM information_schema.table_constraints
+     WHERE table_schema = DATABASE() AND table_name = ? AND constraint_name = ?
+     LIMIT 1`,
+    [tableName, constraintName],
+  );
+  return rows.length > 0;
+};
+
 const tableExists = async (tableName) => {
   const [rows] = await pool.query(
     `SELECT 1
@@ -208,17 +219,122 @@ const ensureJobsTableColumns = async () => {
 const ensureRecruiterTableColumns = async () => {
   if (!(await tableExists("recruiter"))) return;
 
+  if (!(await columnExists("recruiter", "salary"))) {
+    await pool.query(
+      "ALTER TABLE recruiter ADD COLUMN salary VARCHAR(120) NULL",
+    );
+  }
+
+  if (!(await columnExists("recruiter", "monthly_salary"))) {
+    await pool.query(
+      "ALTER TABLE recruiter ADD COLUMN monthly_salary DECIMAL(12,2) NULL",
+    );
+  }
+
+  if (!(await columnExists("recruiter", "daily_salary"))) {
+    await pool.query(
+      "ALTER TABLE recruiter ADD COLUMN daily_salary DECIMAL(12,2) NULL",
+    );
+  }
+
   if (!(await columnExists("recruiter", "points"))) {
     await pool.query(
       "ALTER TABLE recruiter ADD COLUMN points INT NOT NULL DEFAULT 0",
     );
-    return;
   }
 
   await pool.query("UPDATE recruiter SET points = 0 WHERE points IS NULL");
   await pool.query(
     "ALTER TABLE recruiter MODIFY COLUMN points INT NOT NULL DEFAULT 0",
   );
+};
+
+const ensureRecruiterAttendanceTable = async () => {
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS recruiter_attendance (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      recruiter_rid VARCHAR(20) NOT NULL,
+      attendance_date DATE NOT NULL,
+      status ENUM('present', 'absent', 'half_day') NOT NULL DEFAULT 'absent',
+      salary_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+      money_sum_id BIGINT NULL,
+      marked_by VARCHAR(50) NOT NULL DEFAULT 'admin',
+      marked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_recruiter_attendance_day (recruiter_rid, attendance_date),
+      INDEX idx_recruiter_attendance_date_status (attendance_date, status),
+      INDEX idx_recruiter_attendance_money_sum_id (money_sum_id),
+      CONSTRAINT fk_recruiter_attendance_recruiter
+        FOREIGN KEY (recruiter_rid) REFERENCES recruiter(rid)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+      CONSTRAINT fk_recruiter_attendance_money_sum
+        FOREIGN KEY (money_sum_id) REFERENCES money_sum(id)
+        ON DELETE SET NULL
+        ON UPDATE CASCADE
+    )`,
+  );
+
+  if (!(await columnExists("recruiter_attendance", "salary_amount"))) {
+    await pool.query(
+      "ALTER TABLE recruiter_attendance ADD COLUMN salary_amount DECIMAL(12,2) NOT NULL DEFAULT 0",
+    );
+  }
+
+  if (!(await columnExists("recruiter_attendance", "money_sum_id"))) {
+    await pool.query(
+      "ALTER TABLE recruiter_attendance ADD COLUMN money_sum_id BIGINT NULL",
+    );
+  }
+
+  await pool.query(
+    "ALTER TABLE recruiter_attendance MODIFY COLUMN money_sum_id BIGINT NULL",
+  );
+
+  if (!(await columnExists("recruiter_attendance", "marked_by"))) {
+    await pool.query(
+      "ALTER TABLE recruiter_attendance ADD COLUMN marked_by VARCHAR(50) NOT NULL DEFAULT 'admin'",
+    );
+  }
+
+  if (!(await columnExists("recruiter_attendance", "marked_at"))) {
+    await pool.query(
+      "ALTER TABLE recruiter_attendance ADD COLUMN marked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    );
+  }
+
+  if (!(await columnExists("recruiter_attendance", "updated_at"))) {
+    await pool.query(
+      "ALTER TABLE recruiter_attendance ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+    );
+  }
+
+  if (!(await indexExists("recruiter_attendance", "idx_recruiter_attendance_date_status"))) {
+    await pool.query(
+      "CREATE INDEX idx_recruiter_attendance_date_status ON recruiter_attendance (attendance_date, status)",
+    );
+  }
+
+  if (!(await indexExists("recruiter_attendance", "idx_recruiter_attendance_money_sum_id"))) {
+    await pool.query(
+      "CREATE INDEX idx_recruiter_attendance_money_sum_id ON recruiter_attendance (money_sum_id)",
+    );
+  }
+
+  if (
+    !(await constraintExists(
+      "recruiter_attendance",
+      "fk_recruiter_attendance_money_sum",
+    ))
+  ) {
+    await pool.query(
+      `ALTER TABLE recruiter_attendance
+       ADD CONSTRAINT fk_recruiter_attendance_money_sum
+       FOREIGN KEY (money_sum_id) REFERENCES money_sum(id)
+       ON DELETE SET NULL
+       ON UPDATE CASCADE`,
+    );
+  }
 };
 
 const ensureResumesDataTable = async () => {
@@ -497,6 +613,10 @@ const ensureMoneySumTable = async () => {
     );
   }
 
+  await pool.query(
+    "ALTER TABLE money_sum MODIFY COLUMN id BIGINT NOT NULL AUTO_INCREMENT",
+  );
+
   if (!(await indexExists("money_sum", "idx_money_sum_created_at"))) {
     await pool.query(
       "CREATE INDEX idx_money_sum_created_at ON money_sum (created_at)",
@@ -646,6 +766,7 @@ const initDatabase = async () => {
   await ensureApplicationColumns();
   await ensureJobResumeSelectionTable();
   await ensureMoneySumTable();
+  await ensureRecruiterAttendanceTable();
   await ensureJobAccessControlSchema();
   await ensureStatusTable();
 };

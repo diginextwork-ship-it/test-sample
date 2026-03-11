@@ -16,6 +16,7 @@ import AdminTopResumes from "./pages/admin/AdminTopResumes";
 import AdminResumeUploads from "./pages/admin/AdminResumeUploads";
 import AdminManualSelection from "./pages/admin/AdminManualSelection";
 import AdminRevenue from "./pages/admin/AdminRevenue";
+import AdminAttendance from "./pages/admin/AdminAttendance";
 import ErrorPage from "./pages/ErrorPage";
 import ScheduleCall from "./pages/ScheduleCall";
 import { clearAuthSession, getAuthSession } from "./auth/session";
@@ -37,6 +38,7 @@ const PAGE_TO_PATH = {
   adminuploads: "/admin-panel/recruiter-uploads",
   adminmanualselection: "/admin-panel/manual-selection",
   adminrevenue: "/admin-panel/revenue",
+  adminattendance: "/admin-panel/attendance",
 };
 
 const ADMIN_ONLY_PAGES = new Set([
@@ -47,6 +49,7 @@ const ADMIN_ONLY_PAGES = new Set([
   "adminuploads",
   "adminmanualselection",
   "adminrevenue",
+  "adminattendance",
 ]);
 
 const normalizePath = (pathname) => {
@@ -75,6 +78,7 @@ const getPageFromPath = (pathname) => {
   if (normalizedPath === "/admin-panel/recruiter-uploads") return "adminuploads";
   if (normalizedPath === "/admin-panel/manual-selection") return "adminmanualselection";
   if (normalizedPath === "/admin-panel/revenue") return "adminrevenue";
+  if (normalizedPath === "/admin-panel/attendance") return "adminattendance";
   return "notfound";
 };
 
@@ -167,6 +171,8 @@ export default function App() {
         return <AdminManualSelection setCurrentPage={setCurrentPage} />;
       case "adminrevenue":
         return <AdminRevenue setCurrentPage={setCurrentPage} />;
+      case "adminattendance":
+        return <AdminAttendance setCurrentPage={setCurrentPage} />;
       case "notfound":
         return (
           <ErrorPage

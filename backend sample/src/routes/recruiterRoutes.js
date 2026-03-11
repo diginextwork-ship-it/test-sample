@@ -92,6 +92,13 @@ const toNumberOrNull = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const toMoneyOrNull = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return Math.round(parsed * 100) / 100;
+};
+
 const safeJsonOrNull = (value) => {
   if (value === undefined || value === null) return null;
   return JSON.stringify(value);
@@ -341,7 +348,7 @@ const getRecruiterSummary = async (rid) => {
 
 
 router.post("/api/recruiters", requireAuth, requireRoles("admin"), async (req, res) => {
-  const { name, email, password, role } = req.body || {};
+  const { name, email, password, role, monthlySalary } = req.body || {};
 
   if (!name || !email || !password) {
     return res.status(400).json({
@@ -350,10 +357,24 @@ router.post("/api/recruiters", requireAuth, requireRoles("admin"), async (req, r
   }
 
   const normalizedEmail = email.trim().toLowerCase();
+  const normalizedMonthlySalary = String(monthlySalary ?? "").trim();
+  const monthlySalaryAmount = toMoneyOrNull(normalizedMonthlySalary);
+  const dailySalaryAmount =
+    monthlySalaryAmount === null ? null : Math.round((monthlySalaryAmount / 30) * 100) / 100;
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailPattern.test(normalizedEmail)) {
     return res.status(400).json({
       message: "Email must be a valid email address.",
+    });
+  }
+  if (normalizedMonthlySalary.length > 120) {
+    return res.status(400).json({
+      message: "monthlySalary must not exceed 120 characters.",
+    });
+  }
+  if (normalizedMonthlySalary && monthlySalaryAmount === null) {
+    return res.status(400).json({
+      message: "monthlySalary must be a valid non-negative number.",
     });
   }
 
@@ -400,48 +421,42 @@ router.post("/api/recruiters", requireAuth, requireRoles("admin"), async (req, r
     const hasRoleColumn = await columnExists("recruiter", "role");
     const hasAddJobColumn = await columnExists("recruiter", "addjob");
     const hasPointsColumn = await columnExists("recruiter", "points");
+    const hasSalaryColumn = await columnExists("recruiter", "salary");
+    const hasMonthlySalaryColumn = await columnExists("recruiter", "monthly_salary");
+    const hasDailySalaryColumn = await columnExists("recruiter", "daily_salary");
+    const insertColumns = ["rid", "name", "email", "password"];
+    const insertValues = [rid, name.trim(), normalizedEmail, password];
 
-    if (hasRoleColumn && hasAddJobColumn && hasPointsColumn) {
-      await connection.query(
-        "INSERT INTO recruiter (rid, name, email, password, role, addjob, points) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [rid, name.trim(), normalizedEmail, password, normalizedRole, canAddJob, 0]
-      );
-    } else if (hasRoleColumn && hasAddJobColumn) {
-      await connection.query(
-        "INSERT INTO recruiter (rid, name, email, password, role, addjob) VALUES (?, ?, ?, ?, ?, ?)",
-        [rid, name.trim(), normalizedEmail, password, normalizedRole, canAddJob]
-      );
-    } else if (hasRoleColumn && hasPointsColumn) {
-      await connection.query(
-        "INSERT INTO recruiter (rid, name, email, password, role, points) VALUES (?, ?, ?, ?, ?, ?)",
-        [rid, name.trim(), normalizedEmail, password, normalizedRole, 0]
-      );
-    } else if (hasRoleColumn) {
-      await connection.query(
-        "INSERT INTO recruiter (rid, name, email, password, role) VALUES (?, ?, ?, ?, ?)",
-        [rid, name.trim(), normalizedEmail, password, normalizedRole]
-      );
-    } else if (hasAddJobColumn && hasPointsColumn) {
-      await connection.query(
-        "INSERT INTO recruiter (rid, name, email, password, addjob, points) VALUES (?, ?, ?, ?, ?, ?)",
-        [rid, name.trim(), normalizedEmail, password, canAddJob, 0]
-      );
-    } else if (hasAddJobColumn) {
-      await connection.query(
-        "INSERT INTO recruiter (rid, name, email, password, addjob) VALUES (?, ?, ?, ?, ?)",
-        [rid, name.trim(), normalizedEmail, password, canAddJob]
-      );
-    } else if (hasPointsColumn) {
-      await connection.query(
-        "INSERT INTO recruiter (rid, name, email, password, points) VALUES (?, ?, ?, ?, ?)",
-        [rid, name.trim(), normalizedEmail, password, 0]
-      );
-    } else {
-      await connection.query(
-        "INSERT INTO recruiter (rid, name, email, password) VALUES (?, ?, ?, ?)",
-        [rid, name.trim(), normalizedEmail, password]
-      );
+    if (hasRoleColumn) {
+      insertColumns.push("role");
+      insertValues.push(normalizedRole);
     }
+    if (hasAddJobColumn) {
+      insertColumns.push("addjob");
+      insertValues.push(canAddJob);
+    }
+    if (hasPointsColumn) {
+      insertColumns.push("points");
+      insertValues.push(0);
+    }
+    if (hasSalaryColumn) {
+      insertColumns.push("salary");
+      insertValues.push(normalizedMonthlySalary || null);
+    }
+    if (hasMonthlySalaryColumn) {
+      insertColumns.push("monthly_salary");
+      insertValues.push(monthlySalaryAmount);
+    }
+    if (hasDailySalaryColumn) {
+      insertColumns.push("daily_salary");
+      insertValues.push(dailySalaryAmount);
+    }
+
+    const placeholders = insertColumns.map(() => "?").join(", ");
+    await connection.query(
+      `INSERT INTO recruiter (${insertColumns.join(", ")}) VALUES (${placeholders})`,
+      insertValues
+    );
 
     await connection.commit();
     return res.status(201).json({
@@ -452,6 +467,9 @@ router.post("/api/recruiters", requireAuth, requireRoles("admin"), async (req, r
         email: normalizedEmail,
         role: normalizedRole,
         addjob: canAddJob,
+        salary: normalizedMonthlySalary || null,
+        monthlySalary: monthlySalaryAmount,
+        dailySalary: dailySalaryAmount,
       },
     });
   } catch (error) {

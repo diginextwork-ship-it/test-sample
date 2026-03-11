@@ -8,6 +8,7 @@ export default function AdminCreateRecruiter({ setCurrentPage }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [monthlySalary, setMonthlySalary] = useState("");
   const [role, setRole] = useState("recruiter");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,7 +27,7 @@ export default function AdminCreateRecruiter({ setCurrentPage }) {
         headers: getAdminHeaders({
           "Content-Type": "application/json",
         }),
-        body: JSON.stringify({ name, email, password, role }),
+        body: JSON.stringify({ name, email, password, role, monthlySalary }),
       });
 
       const data = await readJsonResponse(response, `Check API base URL: ${API_BASE_URL}`);
@@ -40,6 +41,7 @@ export default function AdminCreateRecruiter({ setCurrentPage }) {
       setName("");
       setEmail("");
       setPassword("");
+      setMonthlySalary("");
       setRole("recruiter");
     } catch (error) {
       if (error instanceof TypeError) {
@@ -154,9 +156,19 @@ export default function AdminCreateRecruiter({ setCurrentPage }) {
             onChange={(e) => setRole(e.target.value)}
             required
           >
+            <option value="team leader">Team Leader</option>
             <option value="job creator">Job Creator</option>
             <option value="recruiter">Recruiter</option>
           </select>
+
+          <label htmlFor="newRecruiterSalary">Monthly Salary</label>
+          <input
+            id="newRecruiterSalary"
+            type="text"
+            value={monthlySalary}
+            onChange={(e) => setMonthlySalary(e.target.value)}
+            placeholder="e.g. 30000"
+          />
 
           <button type="submit" className="admin-create-btn" disabled={isSubmitting}>
             {isSubmitting ? "Creating..." : "Create Recruiter"}

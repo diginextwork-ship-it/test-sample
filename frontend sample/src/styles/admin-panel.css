@@ -353,6 +353,76 @@
   border: 1px solid rgba(220, 38, 38, 0.22);
 }
 
+.admin-attendance-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.admin-attendance-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.admin-attendance-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.admin-attendance-btn {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-attendance-btn:hover {
+  border-color: #94a3b8;
+}
+
+.admin-attendance-btn.is-active {
+  color: #fff;
+  background: #c62828;
+  border-color: #c62828;
+}
+
+.admin-attendance-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.admin-attendance-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.admin-attendance-present {
+  background: rgba(22, 101, 52, 0.12);
+  color: #166534;
+}
+
+.admin-attendance-half_day {
+  background: rgba(180, 83, 9, 0.12);
+  color: #b45309;
+}
+
+.admin-attendance-absent {
+  background: rgba(185, 28, 28, 0.12);
+  color: #b91c1c;
+}
+
 @media (max-width: 900px) {
   .admin-hero {
     flex-direction: column;
@@ -362,6 +432,10 @@
   .admin-page-head {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .admin-attendance-toolbar {
+    align-items: stretch;
   }
 }
 

@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS recruiter (
   email VARCHAR(190) NOT NULL UNIQUE,
   password VARCHAR(255) NOT NULL,
   role VARCHAR(30) NOT NULL DEFAULT 'recruiter',
+  salary VARCHAR(120) NULL,
+  monthly_salary DECIMAL(12,2) NULL,
+  daily_salary DECIMAL(12,2) NULL,
   addjob BOOLEAN NOT NULL DEFAULT FALSE,
   success INT NOT NULL DEFAULT 0,
   points INT NOT NULL DEFAULT 0
@@ -53,6 +56,12 @@ CREATE INDEX IF NOT EXISTS idx_jobs_recruiter_rid ON jobs (recruiter_rid);
 
 ALTER TABLE recruiter
   ADD COLUMN IF NOT EXISTS points INT NOT NULL DEFAULT 0;
+ALTER TABLE recruiter
+  ADD COLUMN IF NOT EXISTS salary VARCHAR(120) NULL;
+ALTER TABLE recruiter
+  ADD COLUMN IF NOT EXISTS monthly_salary DECIMAL(12,2) NULL;
+ALTER TABLE recruiter
+  ADD COLUMN IF NOT EXISTS daily_salary DECIMAL(12,2) NULL;
 
 CREATE TABLE IF NOT EXISTS applications (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -159,6 +168,27 @@ CREATE TABLE IF NOT EXISTS money_sum (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_money_sum_created_at (created_at),
   INDEX idx_money_sum_entry_type (entry_type)
+);
+
+CREATE TABLE IF NOT EXISTS recruiter_attendance (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  recruiter_rid VARCHAR(20) NOT NULL,
+  attendance_date DATE NOT NULL,
+  status ENUM('present', 'absent', 'half_day') NOT NULL DEFAULT 'absent',
+  salary_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  money_sum_id BIGINT NULL,
+  marked_by VARCHAR(50) NOT NULL DEFAULT 'admin',
+  marked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_recruiter_attendance_day (recruiter_rid, attendance_date),
+  INDEX idx_recruiter_attendance_date_status (attendance_date, status),
+  INDEX idx_recruiter_attendance_money_sum_id (money_sum_id),
+  CONSTRAINT fk_recruiter_attendance_recruiter
+    FOREIGN KEY (recruiter_rid) REFERENCES recruiter(rid)
+    ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_recruiter_attendance_money_sum
+    FOREIGN KEY (money_sum_id) REFERENCES money_sum(id)
+    ON UPDATE CASCADE ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS job_recruiter_access (

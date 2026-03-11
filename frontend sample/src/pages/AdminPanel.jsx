@@ -46,9 +46,9 @@ export default function AdminPanel({ setCurrentPage, onLogout }) {
     {
       title: "Attendance system",
       description:
-        "Track intake and expenses (salaries, electricity bills, client payments) with charts and table.",
-      stat: "Add/update/view",
-      page: "attendance panel",
+        "Mark team leaders and recruiters daily, and sync salary expense into the finance ledger.",
+      stat: "Present, absent, half day",
+      page: "adminattendance",
     },
   ];
 
