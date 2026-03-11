@@ -12,7 +12,6 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminPanel from "./pages/AdminPanel";
 import AdminCreateRecruiter from "./pages/admin/AdminCreateRecruiter";
 import AdminRidPerformance from "./pages/admin/AdminRidPerformance";
-import AdminCandidateSubmissions from "./pages/admin/AdminCandidateSubmissions";
 import AdminTopResumes from "./pages/admin/AdminTopResumes";
 import AdminResumeUploads from "./pages/admin/AdminResumeUploads";
 import AdminManualSelection from "./pages/admin/AdminManualSelection";
@@ -34,7 +33,6 @@ const PAGE_TO_PATH = {
   adminpanel: "/admin-panel",
   admincreate: "/admin-panel/create-recruiter",
   adminridstats: "/admin-panel/recruiter-performance",
-  admincandidatestats: "/admin-panel/candidate-submissions",
   admintopresumes: "/admin-panel/top-resumes",
   adminuploads: "/admin-panel/recruiter-uploads",
   adminmanualselection: "/admin-panel/manual-selection",
@@ -45,7 +43,6 @@ const ADMIN_ONLY_PAGES = new Set([
   "adminpanel",
   "admincreate",
   "adminridstats",
-  "admincandidatestats",
   "admintopresumes",
   "adminuploads",
   "adminmanualselection",
@@ -74,7 +71,6 @@ const getPageFromPath = (pathname) => {
   if (normalizedPath === "/admin-panel") return "adminpanel";
   if (normalizedPath === "/admin-panel/create-recruiter") return "admincreate";
   if (normalizedPath === "/admin-panel/recruiter-performance") return "adminridstats";
-  if (normalizedPath === "/admin-panel/candidate-submissions") return "admincandidatestats";
   if (normalizedPath === "/admin-panel/top-resumes") return "admintopresumes";
   if (normalizedPath === "/admin-panel/recruiter-uploads") return "adminuploads";
   if (normalizedPath === "/admin-panel/manual-selection") return "adminmanualselection";
@@ -163,8 +159,6 @@ export default function App() {
         return <AdminCreateRecruiter setCurrentPage={setCurrentPage} />;
       case "adminridstats":
         return <AdminRidPerformance setCurrentPage={setCurrentPage} />;
-      case "admincandidatestats":
-        return <AdminCandidateSubmissions setCurrentPage={setCurrentPage} />;
       case "admintopresumes":
         return <AdminTopResumes setCurrentPage={setCurrentPage} />;
       case "adminuploads":

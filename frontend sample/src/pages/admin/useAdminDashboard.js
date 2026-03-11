@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { API_BASE_URL, getAdminHeaders, readJsonResponse } from "./adminApi";
 
 export default function useAdminDashboard() {
   const [dashboard, setDashboard] = useState({
     recruiterPerformance: [],
-    candidatePerformance: [],
     totalResumeCount: 0,
     recruiterResumeUploads: [],
     topResumesByJob: [],
@@ -31,9 +30,6 @@ export default function useAdminDashboard() {
         recruiterPerformance: Array.isArray(data.recruiterPerformance)
           ? data.recruiterPerformance
           : [],
-        candidatePerformance: Array.isArray(data.candidatePerformance)
-          ? data.candidatePerformance
-          : [],
         totalResumeCount: Number(data.totalResumeCount) || 0,
         recruiterResumeUploads: Array.isArray(data.recruiterResumeUploads)
           ? data.recruiterResumeUploads
@@ -51,30 +47,10 @@ export default function useAdminDashboard() {
     refreshDashboard();
   }, [refreshDashboard]);
 
-  const recruiterChartData = useMemo(
-    () =>
-      dashboard.recruiterPerformance.map((item) => ({
-        rid: item.rid || item.recruiterName,
-        resumeCount: Number(item.resumeCount ?? item.clicks) || 0,
-      })),
-    [dashboard.recruiterPerformance]
-  );
-
-  const candidatePieData = useMemo(
-    () =>
-      dashboard.candidatePerformance.map((item) => ({
-        name: item.candidateName,
-        value: Number(item.clicks) || 0,
-      })),
-    [dashboard.candidatePerformance]
-  );
-
   return {
     dashboard,
     isLoadingDashboard,
     errorMessage,
     refreshDashboard,
-    recruiterChartData,
-    candidatePieData,
   };
 }

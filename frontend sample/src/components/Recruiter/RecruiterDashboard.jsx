@@ -2,13 +2,6 @@ import { useEffect, useState } from "react";
 import PerformanceMetricCard from "./PerformanceMetricCard";
 import { fetchRecruiterDashboard } from "../../services/performanceService";
 
-const formatDateTime = (value) => {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value);
-  return parsed.toLocaleString();
-};
-
 const toDisplay = (value) => (value === null || value === undefined ? "-" : value);
 const getPointsProgressColor = (points) => {
   if (points <= 25) return "danger";
@@ -191,37 +184,6 @@ export default function RecruiterDashboard({ recruiterId, onViewJobs }) {
         </div>
         <div className="points-progress-actions"></div>
       </article>
-
-      <div className="recent-submissions">
-        <h3>Recent Submissions</h3>
-        {Array.isArray(data.recentSubmissions) &&
-        data.recentSubmissions.length > 0 ? (
-          <div className="ui-table-wrap">
-            <table className="performance-table">
-              <thead>
-                <tr>
-                  <th>Job</th>
-                  <th>Candidate</th>
-                  <th>Submitted At</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recentSubmissions.map((item, idx) => (
-                  <tr key={`${item.submittedAt || "t"}-${idx}`}>
-                    <td>{item.job || "Job details unavailable"}</td>
-                    <td>{item.candidate || "Candidate"}</td>
-                    <td>{formatDateTime(item.submittedAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="empty-state">
-            No submissions yet. Start by browsing available jobs.
-          </p>
-        )}
-      </div>
     </section>
   );
 }

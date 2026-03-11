@@ -93,19 +93,19 @@ const recruiterStatsSubquery = `
   GROUP BY rd.rid
 `;
 
-const isJobAdderRole = (role) => {
+const isTeamLeaderRole = (role) => {
   const normalized = toRole(role);
-  return normalized === "job adder" || normalized === "job_adder";
+  return normalized === "team leader" || normalized === "team_leader";
 };
 
 const isRecruiterRole = (role) => toRole(role) === "recruiter";
 
-const assertOwnRidOrJobAdder = (req, res) => {
+const assertOwnRidOrTeamLeader = (req, res) => {
   const authRole = toRole(req.auth?.role);
   const authRid = toRid(req.auth?.rid);
   const requestedRid = toRid(req.params?.rid);
 
-  if (isJobAdderRole(authRole)) return true;
+  if (isTeamLeaderRole(authRole)) return true;
   if (isRecruiterRole(authRole) && authRid && requestedRid && authRid === requestedRid) return true;
 
   res.status(403).json({
@@ -156,9 +156,9 @@ const mapStats = (row) => ({
 router.get(
   "/api/status/recruiter/:rid",
   requireAuth,
-  requireRoles("recruiter", "job adder", "job_adder"),
+  requireRoles("recruiter", "team leader", "team_leader"),
   async (req, res) => {
-    if (!assertOwnRidOrJobAdder(req, res)) return;
+    if (!assertOwnRidOrTeamLeader(req, res)) return;
 
     const rid = toRid(req.params.rid);
     if (!rid) return res.status(400).json({ error: "rid is required." });
@@ -215,7 +215,7 @@ router.get(
 router.get(
   "/api/status/all",
   requireAuth,
-  requireRoles("job adder", "job_adder"),
+  requireRoles("team leader", "team_leader"),
   async (req, res) => {
     const search = String(req.query?.search || "").trim();
     const sortBy = String(req.query?.sortBy || "submitted").trim().toLowerCase();
@@ -315,113 +315,90 @@ router.get(
   }
 );
 
-router.get(
-  "/api/dashboard/job-adder",
-  requireAuth,
-  requireRoles("job adder", "job_adder"),
-  async (_req, res) => {
-    try {
-      const [[jobsOverview]] = await pool.query(
-        `SELECT
-          COUNT(*) AS totalJobs,
-          SUM(CASE WHEN access_mode = 'open' THEN 1 ELSE 0 END) AS openJobs,
-          SUM(CASE WHEN access_mode = 'restricted' THEN 1 ELSE 0 END) AS restrictedJobs
-        FROM jobs`
-      );
+const getTeamLeaderDashboard = async (_req, res) => {
+  try {
+    const [[jobsOverview]] = await pool.query(
+      `SELECT
+        COUNT(*) AS totalJobs,
+        SUM(CASE WHEN access_mode = 'open' THEN 1 ELSE 0 END) AS openJobs,
+        SUM(CASE WHEN access_mode = 'restricted' THEN 1 ELSE 0 END) AS restrictedJobs
+      FROM jobs`
+    );
 
-      const [[recruiterOverview]] = await pool.query(
-        `SELECT
-          COUNT(*) AS totalRecruiters
-        FROM recruiter
-        WHERE LOWER(TRIM(COALESCE(role, 'recruiter'))) = 'recruiter'`
-      );
+    const [[recruiterOverview]] = await pool.query(
+      `SELECT
+        COUNT(*) AS totalRecruiters
+      FROM recruiter
+      WHERE LOWER(TRIM(COALESCE(role, 'recruiter'))) = 'recruiter'`
+    );
 
-      const [[activeOverview]] = await pool.query(
-        `SELECT
-          COUNT(*) AS activeRecruiters,
-          COALESCE(SUM(stats.submitted), 0) AS totalSubmissions
-        FROM (
-          SELECT rd.rid, COUNT(*) AS submitted
-          FROM resumes_data rd
-          WHERE COALESCE(rd.submitted_by_role, 'recruiter') = 'recruiter'
-          GROUP BY rd.rid
-        ) stats`
-      );
-
-      const [topPerformersRows] = await pool.query(
-        `SELECT
-          r.rid,
-          r.name,
-          COALESCE(stats.submitted, 0) AS submitted,
-          COALESCE(r.points, 0) AS points
-        FROM recruiter r
-        LEFT JOIN (
-          SELECT rd.rid, COUNT(*) AS submitted
-          FROM resumes_data rd
-          WHERE COALESCE(rd.submitted_by_role, 'recruiter') = 'recruiter'
-          GROUP BY rd.rid
-        ) stats ON stats.rid = r.rid
-        WHERE LOWER(TRIM(COALESCE(r.role, 'recruiter'))) = 'recruiter'
-        ORDER BY COALESCE(stats.submitted, 0) DESC, COALESCE(r.points, 0) DESC, r.name ASC
-        LIMIT 8`
-      );
-
-      const [recentActivityRows] = await pool.query(
-        `SELECT
-          rd.uploaded_at AS timestamp,
-          rd.applicant_name AS candidate,
-          r.name AS recruiter,
-          j.role_name AS roleName,
-          j.company_name AS companyName
+    const [[activeOverview]] = await pool.query(
+      `SELECT
+        COUNT(*) AS activeRecruiters,
+        COALESCE(SUM(stats.submitted), 0) AS totalSubmissions
+      FROM (
+        SELECT rd.rid, COUNT(*) AS submitted
         FROM resumes_data rd
-        INNER JOIN recruiter r ON r.rid = rd.rid
-        LEFT JOIN jobs j ON j.jid = rd.job_jid
         WHERE COALESCE(rd.submitted_by_role, 'recruiter') = 'recruiter'
-        ORDER BY rd.uploaded_at DESC
-        LIMIT 12`
-      );
+        GROUP BY rd.rid
+      ) stats`
+    );
 
-      return res.status(200).json({
-        overview: {
-          totalJobs: Number(jobsOverview?.totalJobs) || 0,
-          openJobs: Number(jobsOverview?.openJobs) || 0,
-          restrictedJobs: Number(jobsOverview?.restrictedJobs) || 0,
-          totalRecruiters: Number(recruiterOverview?.totalRecruiters) || 0,
-          activeRecruiters: Number(activeOverview?.activeRecruiters) || 0,
-          totalSubmissions: Number(activeOverview?.totalSubmissions) || 0,
-        },
-        topPerformers: topPerformersRows.map((row) => ({
-          rid: row.rid,
-          name: row.name,
-          submitted: Number(row.submitted) || 0,
-          points: Number(row.points) || 0,
-        })),
-        recentActivity: recentActivityRows.map((row) => ({
-          type: "resume_submitted",
-          recruiter: row.recruiter || "Unknown recruiter",
-          job:
-            row.roleName && row.companyName
-              ? `${row.roleName} at ${row.companyName}`
-              : "Job details unavailable",
-          candidate: row.candidate || "Candidate",
-          timestamp: row.timestamp || null,
-        })),
-      });
-    } catch (error) {
-      return res.status(500).json({
-        error: "Failed to fetch job adder dashboard data.",
-        details: error.message,
-      });
-    }
+    const [topPerformersRows] = await pool.query(
+      `SELECT
+        r.rid,
+        r.name,
+        COALESCE(stats.submitted, 0) AS submitted,
+        COALESCE(r.points, 0) AS points
+      FROM recruiter r
+      LEFT JOIN (
+        SELECT rd.rid, COUNT(*) AS submitted
+        FROM resumes_data rd
+        WHERE COALESCE(rd.submitted_by_role, 'recruiter') = 'recruiter'
+        GROUP BY rd.rid
+      ) stats ON stats.rid = r.rid
+      WHERE LOWER(TRIM(COALESCE(r.role, 'recruiter'))) = 'recruiter'
+      ORDER BY COALESCE(stats.submitted, 0) DESC, COALESCE(r.points, 0) DESC, r.name ASC
+      LIMIT 8`
+    );
+
+    return res.status(200).json({
+      overview: {
+        totalJobs: Number(jobsOverview?.totalJobs) || 0,
+        openJobs: Number(jobsOverview?.openJobs) || 0,
+        restrictedJobs: Number(jobsOverview?.restrictedJobs) || 0,
+        totalRecruiters: Number(recruiterOverview?.totalRecruiters) || 0,
+        activeRecruiters: Number(activeOverview?.activeRecruiters) || 0,
+        totalSubmissions: Number(activeOverview?.totalSubmissions) || 0,
+      },
+      topPerformers: topPerformersRows.map((row) => ({
+        rid: row.rid,
+        name: row.name,
+        submitted: Number(row.submitted) || 0,
+        points: Number(row.points) || 0,
+      })),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: "Failed to fetch team leader dashboard data.",
+      details: error.message,
+    });
   }
+};
+
+router.get(
+  "/api/dashboard/team-leader",
+  requireAuth,
+  requireRoles("team leader", "team_leader"),
+  getTeamLeaderDashboard
 );
 
 router.get(
   "/api/dashboard/recruiter/:rid",
   requireAuth,
-  requireRoles("recruiter", "job adder", "job_adder"),
+  requireRoles("recruiter", "team leader", "team_leader"),
   async (req, res) => {
-    if (!assertOwnRidOrJobAdder(req, res)) return;
+    if (!assertOwnRidOrTeamLeader(req, res)) return;
 
     const rid = toRid(req.params.rid);
     if (!rid) return res.status(400).json({ error: "rid is required." });
@@ -509,22 +486,6 @@ router.get(
         [rid]
       );
 
-      const [recentRows] = await pool.query(
-        `SELECT
-          rd.applicant_name AS candidate,
-          rd.uploaded_at AS submittedAt,
-          j.role_name AS roleName,
-          j.company_name AS companyName
-        FROM resumes_data rd
-        LEFT JOIN jobs j ON j.jid = rd.job_jid
-        WHERE rd.rid = ?
-          AND COALESCE(rd.submitted_by_role, 'recruiter') = 'recruiter'
-          ${hasDateRange ? "AND rd.uploaded_at >= ? AND rd.uploaded_at < ?" : ""}
-        ORDER BY rd.uploaded_at DESC
-        LIMIT 10`,
-        hasDateRange ? [rid, startDateTime, endExclusiveDateTime] : [rid]
-      );
-
       const stats = mapStats(recruiterRow);
 
       return res.status(200).json({
@@ -537,14 +498,6 @@ router.get(
         stats,
         accessibleJobsCount: Number(accessibleJobsCountRow?.total) || 0,
         dateRange: hasDateRange ? { startDate, endDate } : null,
-        recentSubmissions: recentRows.map((row) => ({
-          job:
-            row.roleName && row.companyName
-              ? `${row.roleName} at ${row.companyName}`
-              : "Job details unavailable",
-          candidate: row.candidate || "Candidate",
-          submittedAt: row.submittedAt || null,
-        })),
       });
     } catch (error) {
       return res.status(500).json({

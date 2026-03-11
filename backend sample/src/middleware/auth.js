@@ -64,6 +64,14 @@ const getTokenFromRequest = (req) => {
   return String(req.query?.token || "").trim();
 };
 
+const normalizeRoleAlias = (role) => {
+  const normalized = String(role || "").trim().toLowerCase();
+  if (normalized === "job adder" || normalized === "job_adder" || normalized === "team_leader") {
+    return "team leader";
+  }
+  return normalized;
+};
+
 const requireAuth = (req, res, next) => {
   try {
     const token = getTokenFromRequest(req);
@@ -80,8 +88,9 @@ const requireAuth = (req, res, next) => {
 };
 
 const requireRoles = (...allowedRoles) => (req, res, next) => {
-  const role = String(req.auth?.role || "").trim().toLowerCase();
-  if (!allowedRoles.includes(role)) {
+  const role = normalizeRoleAlias(req.auth?.role);
+  const allowed = allowedRoles.map((item) => normalizeRoleAlias(item));
+  if (!allowed.includes(role)) {
     return res.status(403).json({ message: "You do not have access to this resource." });
   }
   return next();
@@ -98,6 +107,7 @@ const requireRecruiterOwner = (req, res, next) => {
 
 module.exports = {
   createAuthToken,
+  normalizeRoleAlias,
   requireAuth,
   requireRoles,
   requireRecruiterOwner,

@@ -1,14 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useEffect, useState } from "react";
 import AdminLayout from "./AdminLayout";
 import { API_BASE_URL, getAdminHeaders, readJsonResponse } from "./adminApi";
 import "../../styles/admin-panel.css";
@@ -27,25 +17,30 @@ const formatDate = (value) => {
   return date.toLocaleString();
 };
 
-const formatTrendDate = (value) => {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
-};
+const REASON_OPTIONS = [
+  { value: "electricity bill", label: "Electricity bill" },
+  { value: "salary", label: "Salary" },
+  { value: "rent", label: "Rent" },
+  { value: "extras", label: "Extras" },
+  { value: "others", label: "Others" },
+];
 
 export default function AdminRevenue({ setCurrentPage }) {
   const [entries, setEntries] = useState([]);
+  const [recruiters, setRecruiters] = useState([]);
   const [summary, setSummary] = useState({ totalIntake: 0, totalExpense: 0, netProfit: 0 });
-  const [dailyTrend, setDailyTrend] = useState([]);
   const [formData, setFormData] = useState({
     entryType: "expense",
     amount: "",
-    reason: "",
+    reasonCategory: "electricity bill",
+    otherReason: "",
+    recruiterRid: "",
+    photoFile: null,
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeletingId, setIsDeletingId] = useState(null);
+  const [uploadInputKey, setUploadInputKey] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
 
@@ -70,7 +65,6 @@ export default function AdminRevenue({ setCurrentPage }) {
         totalExpense: Number(data?.summary?.totalExpense) || 0,
         netProfit: Number(data?.summary?.netProfit) || 0,
       });
-      setDailyTrend(Array.isArray(data.dailyTrend) ? data.dailyTrend : []);
     } catch (error) {
       setErrorMessage(error.message || "Failed to fetch revenue dashboard.");
     } finally {
@@ -78,24 +72,45 @@ export default function AdminRevenue({ setCurrentPage }) {
     }
   };
 
+  const loadRecruiters = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/recruiters/list`, {
+        headers: getAdminHeaders(),
+      });
+      const data = await readJsonResponse(response, "Failed to parse recruiters list.");
+      if (!response.ok) {
+        throw new Error(data?.message || "Failed to fetch recruiters list.");
+      }
+      setRecruiters(Array.isArray(data.recruiters) ? data.recruiters : []);
+    } catch (error) {
+      setRecruiters([]);
+      setErrorMessage(error.message || "Failed to fetch recruiters list.");
+    }
+  };
+
   useEffect(() => {
     loadRevenue();
+    loadRecruiters();
   }, []);
-
-  const chartData = useMemo(
-    () =>
-      dailyTrend.map((item) => ({
-        date: formatTrendDate(item.date),
-        intake: Number(item.intake) || 0,
-        expense: Number(item.expense) || 0,
-        net: Number(item.net) || 0,
-      })),
-    [dailyTrend]
-  );
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      if (name === "reasonCategory") {
+        return {
+          ...prev,
+          reasonCategory: value,
+          otherReason: value === "others" ? prev.otherReason : "",
+          recruiterRid: value === "salary" ? prev.recruiterRid : "",
+        };
+      }
+      return { ...prev, [name]: value };
+    });
+  };
+
+  const handleFileChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    setFormData((prev) => ({ ...prev, photoFile: file }));
   };
 
   const handleAddEntry = async (event) => {
@@ -104,30 +119,46 @@ export default function AdminRevenue({ setCurrentPage }) {
     setErrorMessage("");
     setStatusMessage("");
     try {
+      const payload = new FormData();
+      payload.append("entryType", formData.entryType);
+      payload.append("amount", String(Number(formData.amount)));
+      payload.append("reasonCategory", formData.reasonCategory);
+      if (formData.reasonCategory === "others") {
+        payload.append("otherReason", formData.otherReason.trim());
+      }
+      if (formData.reasonCategory === "salary" && formData.recruiterRid) {
+        payload.append("recruiterRid", formData.recruiterRid);
+      }
+      if (formData.photoFile) {
+        payload.append("photo", formData.photoFile);
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/admin/revenue/entries`, {
         method: "POST",
-        headers: getAdminHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
-          entryType: formData.entryType,
-          amount: Number(formData.amount),
-          reason: formData.reason,
-        }),
+        headers: getAdminHeaders(),
+        body: payload,
       });
       const data = await readJsonResponse(
         response,
         "Failed to parse add revenue entry response."
       );
       if (!response.ok) {
-        throw new Error(data?.message || "Failed to add revenue entry.");
+        throw new Error(data?.error || data?.message || "Failed to add revenue entry.");
       }
 
       setStatusMessage("Revenue entry added.");
       setFormData((prev) => ({
         ...prev,
         amount: "",
-        reason: "",
+        reasonCategory: "electricity bill",
+        otherReason: "",
+        recruiterRid: "",
+        photoFile: null,
       }));
-      await loadRevenue();
+      setUploadInputKey((prev) => prev + 1);
+      try {
+        await loadRevenue();
+      } catch {}
     } catch (error) {
       setErrorMessage(error.message || "Failed to add revenue entry.");
     } finally {
@@ -226,20 +257,62 @@ export default function AdminRevenue({ setCurrentPage }) {
               />
             </div>
             <div>
-              <label htmlFor="reason">
-                {formData.entryType === "expense" ? "Reason (required)" : "Reason / Description"}
-              </label>
-              <input
-                id="reason"
-                name="reason"
-                value={formData.reason}
+              <label htmlFor="reasonCategory">Reason</label>
+              <select
+                id="reasonCategory"
+                name="reasonCategory"
+                value={formData.reasonCategory}
                 onChange={handleInputChange}
-                required={formData.entryType === "expense"}
-                placeholder={
-                  formData.entryType === "expense"
-                    ? "e.g. Electricity bill, salary, internet"
-                    : "e.g. Client payment from ABC Corp"
-                }
+                required
+              >
+                {REASON_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {formData.reasonCategory === "salary" ? (
+              <div>
+                <label htmlFor="recruiterRid">RID and recruiter</label>
+                <select
+                  id="recruiterRid"
+                  name="recruiterRid"
+                  value={formData.recruiterRid}
+                  onChange={handleInputChange}
+                  required
+                >
+                  <option value="">Select recruiter</option>
+                  {recruiters.map((recruiter) => (
+                    <option key={recruiter.rid} value={recruiter.rid}>
+                      {recruiter.rid} - {recruiter.name || "Unknown"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            {formData.reasonCategory === "others" ? (
+              <div>
+                <label htmlFor="otherReason">Specify reason</label>
+                <input
+                  id="otherReason"
+                  name="otherReason"
+                  value={formData.otherReason}
+                  onChange={handleInputChange}
+                  required
+                  placeholder="Enter custom reason"
+                />
+              </div>
+            ) : null}
+            <div>
+              <label htmlFor="photo">Attachment (optional image/PDF)</label>
+              <input
+                key={uploadInputKey}
+                id="photo"
+                name="photo"
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,.pdf,image/*,application/pdf"
+                onChange={handleFileChange}
               />
             </div>
           </div>
@@ -247,28 +320,6 @@ export default function AdminRevenue({ setCurrentPage }) {
             {isSubmitting ? "Saving..." : "Add Entry"}
           </button>
         </form>
-      </div>
-
-      <div className="admin-dashboard-card admin-card-large">
-        <h2 style={{ marginTop: 0 }}>Revenue trend</h2>
-        {chartData.length === 0 ? (
-          <p className="admin-chart-empty">No revenue entries yet.</p>
-        ) : (
-          <div className="admin-chart-wrap">
-            <ResponsiveContainer width="100%" height={320}>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="intake" stroke="#15803d" strokeWidth={2.5} />
-                <Line type="monotone" dataKey="expense" stroke="#b91c1c" strokeWidth={2.5} />
-                <Line type="monotone" dataKey="net" stroke="#1d4ed8" strokeWidth={3} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
       </div>
 
       <div className="admin-dashboard-card admin-card-large">
@@ -286,6 +337,7 @@ export default function AdminRevenue({ setCurrentPage }) {
                   <th>Expense</th>
                   <th>Profit (running)</th>
                   <th>Reason</th>
+                  <th>Attachment</th>
                   <th>Created At</th>
                   <th>Action</th>
                 </tr>
@@ -299,6 +351,15 @@ export default function AdminRevenue({ setCurrentPage }) {
                     <td>{toCurrency(item.expense)}</td>
                     <td>{toCurrency(item.profit)}</td>
                     <td>{item.reason || "N/A"}</td>
+                    <td>
+                      {item.photo ? (
+                        <a href={item.photo} target="_blank" rel="noreferrer">
+                          View
+                        </a>
+                      ) : (
+                        "N/A"
+                      )}
+                    </td>
                     <td>{formatDate(item.createdAt)}</td>
                     <td>
                       <button

@@ -7,7 +7,7 @@ const {
   parseResumeWithAts,
   extractApplicantName,
 } = require("../resumeparser/service");
-const { requireAuth, requireRoles } = require("../middleware/auth");
+const { normalizeRoleAlias, requireAuth, requireRoles } = require("../middleware/auth");
 const { validateResumeFile } = require("../middleware/uploadValidation");
 
 const router = express.Router();
@@ -336,7 +336,7 @@ router.get("/api/jobs", async (_req, res) => {
 router.post(
   "/api/jobs",
   requireAuth,
-  requireRoles("job creator", "job adder", "job_adder", "recruiter"),
+  requireRoles("job creator", "team leader", "team_leader", "recruiter"),
   async (req, res) => {
   const {
     recruiter_rid,
@@ -461,16 +461,15 @@ router.post(
       return res.status(403).json({ message: "Recruiter is not authorized." });
     }
 
-    const recruiterRole = String(recruiters[0].role || "").trim().toLowerCase();
+    const recruiterRole = normalizeRoleAlias(recruiters[0].role);
     const canCreateJobs = hasRoleColumn
       ? recruiterRole === "job creator" ||
-        recruiterRole === "job adder" ||
-        recruiterRole === "job_adder" ||
+        recruiterRole === "team leader" ||
         Boolean(recruiters[0].addjob)
       : Boolean(recruiters[0].addjob);
 
     if (!canCreateJobs) {
-      return res.status(403).json({ message: "Only job creator/job adder can add jobs." });
+      return res.status(403).json({ message: "Only job creator/team leader can add jobs." });
     }
 
     const { validRecruiterIds, invalidRecruiterIds } = await validateRecruiterIds(
@@ -696,7 +695,7 @@ router.post("/api/applications/parse-resume", async (req, res) => {
 router.get(
   "/api/jobs/my",
   requireAuth,
-  requireRoles("job creator", "job adder", "job_adder"),
+  requireRoles("job creator", "team leader", "team_leader"),
   async (req, res) => {
     try {
       const authRid = toTrimmedString(req.auth?.rid);
@@ -748,7 +747,7 @@ router.get(
 router.get(
   "/api/jobs/:jid/resume-statuses",
   requireAuth,
-  requireRoles("job creator", "job adder", "job_adder"),
+  requireRoles("job creator", "team leader", "team_leader"),
   requireOwnedJob,
   async (req, res) => {
     try {
@@ -816,7 +815,7 @@ router.get(
 router.post(
   "/api/jobs/:jid/resume-statuses",
   requireAuth,
-  requireRoles("job creator", "job adder", "job_adder"),
+  requireRoles("job creator", "team leader", "team_leader"),
   requireOwnedJob,
   async (req, res) => {
     const normalizedResId = toTrimmedString(req.body?.resId);
@@ -834,60 +833,108 @@ router.post(
     }
 
     try {
-      const [resumeRows] = await pool.query(
-        `SELECT res_id AS resId, job_jid AS jobJid
-         FROM resumes_data
-         WHERE res_id = ?
-         LIMIT 1`,
-        [normalizedResId]
-      );
+      const connection = await pool.getConnection();
+      try {
+        await connection.beginTransaction();
 
-      if (resumeRows.length === 0) {
-        return res.status(404).json({ message: "Resume not found." });
-      }
+        const [resumeRows] = await connection.query(
+          `SELECT res_id AS resId, job_jid AS jobJid, rid AS recruiterRid
+           FROM resumes_data
+           WHERE res_id = ?
+           LIMIT 1`,
+          [normalizedResId]
+        );
 
-      if (Number(resumeRows[0].jobJid) !== req.ownedJob.jid) {
-        return res.status(400).json({
-          message: "The provided resume does not belong to this job.",
-        });
-      }
+        if (resumeRows.length === 0) {
+          await connection.rollback();
+          return res.status(404).json({ message: "Resume not found." });
+        }
 
-      if (normalizedStatus === "pending") {
-        await pool.query(
-          `DELETE FROM job_resume_selection
-           WHERE job_jid = ? AND res_id = ?`,
+        if (Number(resumeRows[0].jobJid) !== req.ownedJob.jid) {
+          await connection.rollback();
+          return res.status(400).json({
+            message: "The provided resume does not belong to this job.",
+          });
+        }
+
+        const recruiterRid = toTrimmedString(resumeRows[0].recruiterRid);
+        const [existingSelectionRows] = await connection.query(
+          `SELECT selection_status AS selectionStatus
+           FROM job_resume_selection
+           WHERE job_jid = ? AND res_id = ?
+           LIMIT 1`,
           [req.ownedJob.jid, normalizedResId]
         );
-      } else {
-        await pool.query(
-          `INSERT INTO job_resume_selection
-            (job_jid, res_id, selected_by_admin, selection_status, selection_note)
-           VALUES (?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE
-             selected_by_admin = VALUES(selected_by_admin),
-             selection_status = VALUES(selection_status),
-             selection_note = VALUES(selection_note),
-             selected_at = CURRENT_TIMESTAMP`,
-          [
-            req.ownedJob.jid,
-            normalizedResId,
-            actorRid || "job-adder",
-            normalizedStatus,
-            normalizedNote || null,
-          ]
-        );
-      }
+        const previousStatus = toTrimmedString(existingSelectionRows[0]?.selectionStatus).toLowerCase() || "pending";
 
-      return res.status(200).json({
-        message: "Resume status updated successfully.",
-        data: {
-          jobId: req.ownedJob.jid,
-          resId: normalizedResId,
-          status: normalizedStatus,
-          note: normalizedNote || null,
-          updatedBy: actorRid || "job-adder",
-        },
-      });
+        if (normalizedStatus === "pending") {
+          await connection.query(
+            `DELETE FROM job_resume_selection
+             WHERE job_jid = ? AND res_id = ?`,
+            [req.ownedJob.jid, normalizedResId]
+          );
+        } else {
+          await connection.query(
+            `INSERT INTO job_resume_selection
+              (job_jid, res_id, selected_by_admin, selection_status, selection_note)
+             VALUES (?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+               selected_by_admin = VALUES(selected_by_admin),
+               selection_status = VALUES(selection_status),
+               selection_note = VALUES(selection_note),
+               selected_at = CURRENT_TIMESTAMP`,
+            [
+              req.ownedJob.jid,
+              normalizedResId,
+              actorRid || "team-leader",
+              normalizedStatus,
+              normalizedNote || null,
+            ]
+          );
+        }
+
+        if (recruiterRid && previousStatus !== normalizedStatus) {
+          const selectDelta =
+            (normalizedStatus === "selected" ? 1 : 0) - (previousStatus === "selected" ? 1 : 0);
+          const rejectDelta =
+            (normalizedStatus === "rejected" ? 1 : 0) - (previousStatus === "rejected" ? 1 : 0);
+
+          if (selectDelta !== 0 || rejectDelta !== 0) {
+            await connection.query(
+              `INSERT INTO status (recruiter_rid, submitted, \`select\`, reject, last_updated)
+               VALUES (?, 0, ?, ?, CURRENT_TIMESTAMP)
+               ON DUPLICATE KEY UPDATE
+                 \`select\` = GREATEST(0, COALESCE(\`select\`, 0) + ?),
+                 reject = GREATEST(0, COALESCE(reject, 0) + ?),
+                 last_updated = CURRENT_TIMESTAMP`,
+              [
+                recruiterRid,
+                Math.max(0, selectDelta),
+                Math.max(0, rejectDelta),
+                selectDelta,
+                rejectDelta,
+              ]
+            );
+          }
+        }
+
+        await connection.commit();
+        return res.status(200).json({
+          message: "Resume status updated successfully.",
+          data: {
+            jobId: req.ownedJob.jid,
+            resId: normalizedResId,
+            status: normalizedStatus,
+            note: normalizedNote || null,
+            updatedBy: actorRid || "team-leader",
+          },
+        });
+      } catch (innerError) {
+        await connection.rollback();
+        throw innerError;
+      } finally {
+        connection.release();
+      }
     } catch (error) {
       return res.status(500).json({
         message: "Failed to update resume status.",
@@ -900,7 +947,7 @@ router.post(
 router.get(
   "/api/jobs/:jid/access",
   requireAuth,
-  requireRoles("job creator", "job adder", "job_adder"),
+  requireRoles("job creator", "team leader", "team_leader"),
   requireOwnedJob,
   async (req, res) => {
     try {
@@ -946,7 +993,7 @@ router.get(
 router.post(
   "/api/jobs/:jid/access",
   requireAuth,
-  requireRoles("job creator", "job adder", "job_adder"),
+  requireRoles("job creator", "team leader", "team_leader"),
   requireOwnedJob,
   async (req, res) => {
     const { recruiterIds, notes } = req.body || {};
@@ -1006,7 +1053,7 @@ router.post(
 router.delete(
   "/api/jobs/:jid/access/:rid",
   requireAuth,
-  requireRoles("job creator", "job adder", "job_adder"),
+  requireRoles("job creator", "team leader", "team_leader"),
   requireOwnedJob,
   async (req, res) => {
     const recruiterRid = toTrimmedString(req.params.rid);
@@ -1046,7 +1093,7 @@ router.delete(
 router.put(
   "/api/jobs/:jid/access-mode",
   requireAuth,
-  requireRoles("job creator", "job adder", "job_adder"),
+  requireRoles("job creator", "team leader", "team_leader"),
   requireOwnedJob,
   async (req, res) => {
     const normalizedAccessMode = normalizeAccessMode(req.body?.accessMode);

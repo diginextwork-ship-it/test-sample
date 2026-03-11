@@ -3,7 +3,7 @@ import { fetchAllRecruiterStatuses } from "../../services/performanceService";
 
 const metricDisplay = (value) => (value === null || value === undefined ? "-" : value);
 
-export default function RecruiterPerformanceTable() {
+export default function RecruiterPerformanceTable({ refreshKey = 0 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [rows, setRows] = useState([]);
@@ -34,7 +34,7 @@ export default function RecruiterPerformanceTable() {
       active = false;
       clearTimeout(timer);
     };
-  }, [sortBy, sortOrder, search]);
+  }, [sortBy, sortOrder, search, refreshKey]);
 
   const derived = useMemo(() => {
     const totalSubmitted = rows.reduce((sum, item) => sum + (item?.stats?.submitted || 0), 0);

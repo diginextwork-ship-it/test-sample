@@ -4,6 +4,7 @@ const pool = require("../config/db");
 const { extractResumeAts, parseResumeWithAts, extractApplicantName } = require("../resumeparser/service");
 const {
   createAuthToken,
+  normalizeRoleAlias,
   requireAuth,
   requireRoles,
   requireRecruiterOwner,
@@ -54,14 +55,18 @@ const getRecruiterIdColumn = async (tableName) => {
 };
 
 const normalizeRecruiterRole = (value, addjobValue) => {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (normalized === "job creator" || normalized === "job adder" || normalized === "job_adder") {
-    return "job adder";
+  const normalized = normalizeRoleAlias(value);
+  if (
+    normalized === "job creator" ||
+    normalized === "team leader" ||
+    normalized === "team_leader"
+  ) {
+    return "team leader";
   }
   if (normalized === "recruiter") {
     return "recruiter";
   }
-  return Boolean(addjobValue) ? "job adder" : "recruiter";
+  return Boolean(addjobValue) ? "team leader" : "recruiter";
 };
 
 const normalizeAccessMode = (value) => {
@@ -198,7 +203,7 @@ const buildJobAtsContext = (jobRow) => {
 const escapeLike = (value) => String(value || "").replace(/[\\%_]/g, "\\$&");
 
 const authorizeRecruiterResourceView = (req, res, rid) => {
-  const role = String(req.auth?.role || "").trim().toLowerCase();
+  const role = normalizeRoleAlias(req.auth?.role);
   const authRid = String(req.auth?.rid || "").trim();
 
   if (role === "recruiter" && authRid !== rid) {
@@ -206,7 +211,10 @@ const authorizeRecruiterResourceView = (req, res, rid) => {
     return false;
   }
 
-  if (role === "job adder" || role === "job_adder") {
+  if (
+    role === "team leader" ||
+    role === "team_leader"
+  ) {
     return true;
   }
 
@@ -293,7 +301,6 @@ const getRecruiterSummary = async (rid) => {
   let success = 0;
   let points = 0;
   let thisMonth = 0;
-  let monthlyTrend = [];
 
   if (hasSuccessColumn) {
     const [rows] = await pool.query(
@@ -315,28 +322,22 @@ const getRecruiterSummary = async (rid) => {
   if (hasClicksTable) {
     const recruiterIdColumn = await getRecruiterIdColumn("recruiter_candidate_clicks");
     if (!recruiterIdColumn) {
-      return { success, points, thisMonth, monthlyTrend };
+      return { success, points, thisMonth };
     }
 
-    const [trendRows] = await pool.query(
-      `SELECT DATE(created_at) AS date, COUNT(*) AS clicks
+    const [monthRows] = await pool.query(
+      `SELECT COUNT(*) AS clicks
        FROM recruiter_candidate_clicks
        WHERE ${recruiterIdColumn} = ?
          AND YEAR(created_at) = YEAR(CURDATE())
-         AND MONTH(created_at) = MONTH(CURDATE())
-       GROUP BY DATE(created_at)
-       ORDER BY DATE(created_at) ASC`,
+         AND MONTH(created_at) = MONTH(CURDATE())`,
       [rid]
     );
 
-    monthlyTrend = trendRows.map((row) => ({
-      date: row.date,
-      clicks: Number(row.clicks) || 0,
-    }));
-    thisMonth = monthlyTrend.reduce((sum, row) => sum + row.clicks, 0);
+    thisMonth = Number(monthRows?.[0]?.clicks) || 0;
   }
 
-  return { success, points, thisMonth, monthlyTrend };
+  return { success, points, thisMonth };
 };
 
 
@@ -384,18 +385,19 @@ router.post("/api/recruiters", requireAuth, requireRoles("admin"), async (req, r
     const rid = `hnr-${nextNumber}`;
 
     const normalizedRole = String(role || "recruiter").trim().toLowerCase();
-    const allowedRoles = new Set(["job creator", "job adder", "job_adder", "recruiter"]);
+    const allowedRoles = new Set(["job creator", "team leader", "team_leader", "recruiter"]);
     if (!allowedRoles.has(normalizedRole)) {
       await connection.rollback();
       return res.status(400).json({
-        message: "role must be one of 'job creator', 'job adder', 'job_adder', or 'recruiter'.",
+        message:
+          "role must be one of 'job creator', 'team leader', 'team_leader', or 'recruiter'.",
       });
     }
 
     const canAddJob =
       normalizedRole === "job creator" ||
-      normalizedRole === "job adder" ||
-      normalizedRole === "job_adder";
+      normalizedRole === "team leader" ||
+      normalizedRole === "team_leader";
     const hasRoleColumn = await columnExists("recruiter", "role");
     const hasAddJobColumn = await columnExists("recruiter", "addjob");
     const hasPointsColumn = await columnExists("recruiter", "points");
@@ -525,7 +527,7 @@ router.post("/api/recruiters/login", async (req, res) => {
 router.get(
   "/api/recruiters/list",
   requireAuth,
-  requireRoles("job adder", "job_adder"),
+  requireRoles("team leader", "team_leader"),
   async (req, res) => {
     const rawSearch = String(req.query?.search || "").trim();
     const safeLike = `%${rawSearch.replace(/[%_]/g, "\\$&")}%`;
@@ -572,7 +574,7 @@ router.get(
 router.get(
   "/api/recruiters/:rid/accessible-jobs",
   requireAuth,
-  requireRoles("recruiter", "job adder", "job_adder"),
+  requireRoles("recruiter", "team leader", "team_leader"),
   async (req, res) => {
     const rid = String(req.params.rid || "").trim();
     if (!rid) {
@@ -680,7 +682,7 @@ router.get(
 router.get(
   "/api/recruiters/:rid/can-access/:jid",
   requireAuth,
-  requireRoles("recruiter", "job adder", "job_adder"),
+  requireRoles("recruiter", "team leader", "team_leader"),
   async (req, res) => {
     const rid = String(req.params.rid || "").trim();
     const safeJobId = toPositiveInt(req.params.jid);
@@ -1309,7 +1311,6 @@ router.get(
         points: summary.points,
         thisMonth: summary.thisMonth,
       },
-      monthlyTrend: summary.monthlyTrend,
     });
   } catch (error) {
     return res.status(500).json({
@@ -1372,7 +1373,7 @@ router.post(
 router.get(
   "/api/recruiters/:rid/applications",
   requireAuth,
-  requireRoles("recruiter", "job creator", "job adder"),
+  requireRoles("recruiter", "job creator", "team leader", "team_leader"),
   requireRecruiterOwner,
   async (req, res) => {
   const { rid } = req.params;

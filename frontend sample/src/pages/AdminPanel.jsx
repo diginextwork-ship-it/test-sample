@@ -19,12 +19,6 @@ export default function AdminPanel({ setCurrentPage, onLogout }) {
       page: "adminridstats",
     },
     {
-      title: "Candidate Submissions",
-      description: "View candidate resume submission activity.",
-      stat: `${dashboard.candidatePerformance.length} candidates`,
-      page: "admincandidatestats",
-    },
-    {
       title: "Top ATS Resumes",
       description: "Review top-matched resumes per job.",
       stat: `${dashboard.topResumesByJob.length} jobs`,

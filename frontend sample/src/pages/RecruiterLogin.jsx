@@ -1,13 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useEffect, useState } from "react";
 import "../styles/recruiter-login.css";
 import { clearAuthSession, getAuthSession, saveAuthSession } from "../auth/session";
 import { API_BASE_URL, BACKEND_CONNECTION_ERROR } from "../config/api";
@@ -16,17 +7,10 @@ import JobAccessControlModal from "../components/JobAdder/JobAccessControlModal"
 import RecruiterMultiSelect from "../components/JobAdder/RecruiterMultiSelect";
 import RecruiterJobsBoard from "../components/Recruiter/RecruiterJobsBoard";
 import RecruiterDashboard from "../components/Recruiter/RecruiterDashboard";
-import JobAdderDashboard from "../components/JobAdder/JobAdderDashboard";
+import TeamLeaderDashboard from "../components/JobAdder/JobAdderDashboard";
 import { fetchMyJobs, fetchRecruitersList } from "../services/jobAccessService";
 import "../styles/recruiter-jobs-board.css";
 import "../styles/performance-dashboard.css";
-
-const formatTrendDate = (dateValue) => {
-  if (!dateValue) return "";
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return String(dateValue);
-  return date.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
-};
 
 const formatDateTime = (dateValue) => {
   if (!dateValue) return "";
@@ -72,6 +56,16 @@ const toUiJob = (job) => ({
   recruiterCount: Number(job.recruiterCount) || 0,
 });
 
+const isTeamLeaderRole = (role) => {
+  const normalized = String(role || "").trim().toLowerCase();
+  return (
+    normalized === "team leader" ||
+    normalized === "team_leader" ||
+    normalized === "job adder" ||
+    normalized === "job_adder"
+  );
+};
+
 export default function RecruiterLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -83,7 +77,6 @@ export default function RecruiterLogin() {
   const [recruiter, setRecruiter] = useState(null);
   const [dashboard, setDashboard] = useState({
     summary: { success: 0, points: 0, thisMonth: 0 },
-    monthlyTrend: [],
   });
   const [applications, setApplications] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -118,11 +111,9 @@ export default function RecruiterLogin() {
   const normalizedRole = String(recruiter?.role || "").trim().toLowerCase();
   const canCreateJobs =
     normalizedRole === "job creator" ||
-    normalizedRole === "job adder" ||
-    normalizedRole === "job_adder" ||
+    isTeamLeaderRole(normalizedRole) ||
     Boolean(recruiter?.addjob);
-  const canManageJobAccess =
-    normalizedRole === "job adder" || normalizedRole === "job_adder";
+  const canManageJobAccess = isTeamLeaderRole(normalizedRole);
   const canUploadResumes = normalizedRole === "recruiter";
   const showRecruiterPerformance = normalizedRole === "recruiter";
   const getAuthHeaders = (extraHeaders = {}) => {
@@ -143,7 +134,6 @@ export default function RecruiterLogin() {
     }
     setDashboard({
       summary: data.summary || { success: 0, points: 0, thisMonth: 0 },
-      monthlyTrend: Array.isArray(data.monthlyTrend) ? data.monthlyTrend : [],
     });
   };
 
@@ -247,12 +237,16 @@ export default function RecruiterLogin() {
     const session = getAuthSession();
     if (!session) return;
     const sessionRole = String(session.role || "").toLowerCase();
-    if (sessionRole === "recruiter" || sessionRole === "job creator" || sessionRole === "job adder") {
+    if (
+      sessionRole === "recruiter" ||
+      sessionRole === "job creator" ||
+      isTeamLeaderRole(sessionRole)
+    ) {
       setRecruiter({
         rid: session.rid,
         name: session.name || "Recruiter",
         role: session.role,
-        addjob: sessionRole === "job creator" || sessionRole === "job adder",
+        addjob: sessionRole === "job creator" || isTeamLeaderRole(sessionRole),
       });
     }
   }, [recruiter]);
@@ -280,15 +274,6 @@ export default function RecruiterLogin() {
 
     loadDashboard();
   }, [recruiter?.rid, canCreateJobs, canManageJobAccess, canUploadResumes, showRecruiterPerformance]);
-
-  const recruiterTrendData = useMemo(
-    () =>
-      dashboard.monthlyTrend.map((entry) => ({
-        date: formatTrendDate(entry.date),
-        clicks: Number(entry.clicks) || 0,
-      })),
-    [dashboard.monthlyTrend]
-  );
 
   const handleCompleteCandidate = async () => {
     if (!recruiter?.rid) return;
@@ -470,7 +455,7 @@ export default function RecruiterLogin() {
             ) : null}
 
             {canManageJobAccess ? (
-              <JobAdderDashboard
+              <TeamLeaderDashboard
                 jobsManagementContent={
                   <>
                     <JobsListTable

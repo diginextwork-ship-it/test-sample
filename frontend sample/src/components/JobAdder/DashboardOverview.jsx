@@ -1,10 +1,3 @@
-const formatDateTime = (value) => {
-  if (!value) return "—";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value);
-  return parsed.toLocaleString();
-};
-
 const SummaryCard = ({ title, value }) => (
   <article className="summary-card">
     <h4>{title}</h4>
@@ -41,22 +34,6 @@ export default function DashboardOverview({ data, loading }) {
             ))
           ) : (
             <p className="empty-state">No top performers yet.</p>
-          )}
-        </article>
-
-        <article className="dashboard-panel">
-          <h3>Recent Activity</h3>
-          {Array.isArray(data.recentActivity) && data.recentActivity.length ? (
-            data.recentActivity.map((item, idx) => (
-              <div className="activity-row" key={`${item.timestamp || "t"}-${idx}`}>
-                <span>{item.recruiter}</span>
-                <span>{item.type}</span>
-                <span>{item.job}</span>
-                <span>{formatDateTime(item.timestamp)}</span>
-              </div>
-            ))
-          ) : (
-            <p className="empty-state">No recent activity available.</p>
           )}
         </article>
       </div>

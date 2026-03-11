@@ -1,9 +1,46 @@
 const express = require("express");
+const multer = require("multer");
 const pool = require("../config/db");
 const { createAuthToken, requireAuth, requireRoles } = require("../middleware/auth");
 
 const router = express.Router();
 const ADMIN_API_KEY = String(process.env.ADMIN_API_KEY || "admin123");
+const ALLOWED_REVENUE_UPLOAD_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+]);
+const MAX_REVENUE_UPLOAD_BYTES = 8 * 1024 * 1024;
+
+const revenueUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_REVENUE_UPLOAD_BYTES },
+  fileFilter: (_req, file, callback) => {
+    const mimeType = String(file?.mimetype || "").trim().toLowerCase();
+    if (!ALLOWED_REVENUE_UPLOAD_MIME_TYPES.has(mimeType)) {
+      return callback(
+        new Error("Only JPG, PNG, WEBP images or PDF files are allowed."),
+      );
+    }
+    return callback(null, true);
+  },
+});
+
+const parseRevenueUpload = (req, res, next) => {
+  revenueUpload.single("photo")(req, res, (error) => {
+    if (!error) return next();
+    if (error?.code === "LIMIT_FILE_SIZE") {
+      return res
+        .status(400)
+        .json({ message: "Attachment must be 8MB or smaller." });
+    }
+    return res.status(400).json({
+      message: error?.message || "Invalid attachment upload.",
+    });
+  });
+};
 
 const tableExists = async (tableName) => {
   try {
@@ -36,6 +73,20 @@ const columnExists = async (tableName, columnName) => {
   return rows.length > 0;
 };
 
+const getColumnMetadata = async (tableName, columnName) => {
+  const [rows] = await pool.query(
+    `SELECT
+      COLUMN_TYPE AS columnType,
+      DATA_TYPE AS dataType,
+      IS_NULLABLE AS isNullable
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
+     LIMIT 1`,
+    [tableName, columnName]
+  );
+  return rows[0] || null;
+};
+
 const ensureMoneySumTable = async () => {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS money_sum (
@@ -44,6 +95,7 @@ const ensureMoneySumTable = async () => {
       expense DECIMAL(14,2) NOT NULL DEFAULT 0,
       profit DECIMAL(14,2) NOT NULL DEFAULT 0,
       reason TEXT NULL,
+      photo LONGTEXT NULL,
       entry_type VARCHAR(20) NOT NULL DEFAULT 'expense',
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -61,6 +113,19 @@ const ensureMoneySumTable = async () => {
   }
   if (!(await columnExists("money_sum", "reason"))) {
     await pool.query("ALTER TABLE money_sum ADD COLUMN reason TEXT NULL");
+  }
+  const reasonMetadata = await getColumnMetadata("money_sum", "reason");
+  const reasonType = String(reasonMetadata?.dataType || "").toLowerCase();
+  if (reasonType && reasonType !== "text" && reasonType !== "mediumtext" && reasonType !== "longtext") {
+    await pool.query("ALTER TABLE money_sum MODIFY COLUMN reason TEXT NULL");
+  }
+  if (!(await columnExists("money_sum", "photo"))) {
+    await pool.query("ALTER TABLE money_sum ADD COLUMN photo LONGTEXT NULL");
+  }
+  const photoMetadata = await getColumnMetadata("money_sum", "photo");
+  const photoType = String(photoMetadata?.dataType || "").toLowerCase();
+  if (photoType && photoType !== "longtext") {
+    await pool.query("ALTER TABLE money_sum MODIFY COLUMN photo LONGTEXT NULL");
   }
   if (!(await columnExists("money_sum", "entry_type"))) {
     await pool.query(
@@ -118,6 +183,63 @@ const normalizeRevenueEntryType = (value) => {
   return "";
 };
 
+const normalizeRevenueReasonCategory = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "electricity bill") return "electricity bill";
+  if (normalized === "salary") return "salary";
+  if (normalized === "rent") return "rent";
+  if (normalized === "extras") return "extras";
+  if (normalized === "others") return "others";
+  return "";
+};
+
+const revenueReasonFromPayload = ({
+  reasonCategory,
+  otherReason,
+  recruiterRid,
+  recruiterName,
+}) => {
+  const safeCategory = normalizeRevenueReasonCategory(reasonCategory);
+  if (!safeCategory) {
+    return { error: "A valid reason must be selected." };
+  }
+
+  if (safeCategory === "others") {
+    const details = String(otherReason || "").trim();
+    if (!details) {
+      return { error: "Please specify the reason when selecting Others." };
+    }
+    return { reason: details };
+  }
+
+  if (safeCategory === "salary") {
+    const rid = String(recruiterRid || "").trim();
+    if (!rid) {
+      return { error: "Recruiter RID is required for salary entries." };
+    }
+    const label = String(recruiterName || "").trim();
+    return {
+      reason: label ? `salary - ${rid} (${label})` : `salary - ${rid}`,
+    };
+  }
+
+  return { reason: safeCategory };
+};
+
+const toRevenueAttachmentDataUrl = (file) => {
+  if (!file?.buffer || !file?.mimetype) return "";
+  const mimeType = String(file.mimetype || "").trim().toLowerCase();
+  if (!ALLOWED_REVENUE_UPLOAD_MIME_TYPES.has(mimeType)) return "";
+  const base64 = file.buffer.toString("base64");
+  return `data:${mimeType};base64,${base64}`;
+};
+
+const normalizePhotoValue = (value) => {
+  if (!value) return "";
+  if (Buffer.isBuffer(value)) return value.toString("utf8");
+  return String(value);
+};
+
 const recomputeMoneyProfit = async (connection) => {
   const [rows] = await connection.query(
     `SELECT id, company_rev AS companyRev, expense
@@ -152,7 +274,6 @@ router.use("/api/admin", requireAuth, requireRoles("admin"));
 router.get("/api/admin/dashboard", async (_req, res) => {
   try {
     let recruiterPerformance = [];
-    let candidatePerformance = [];
     let totalResumeCount = 0;
     let recruiterResumeUploads = [];
     let topResumesByJob = [];
@@ -173,41 +294,6 @@ router.get("/api/admin/dashboard", async (_req, res) => {
         rid: row.rid,
         recruiterName: row.recruiterName,
         resumeCount: Number(row.resumeCount) || 0,
-      }));
-    }
-
-    if (await tableExists("applications")) {
-      const hasResumeFilenameColumn = await columnExists("applications", "resume_filename");
-      const resumeFilter = hasResumeFilenameColumn
-        ? "AND resume_filename IS NOT NULL AND TRIM(resume_filename) <> ''"
-        : "";
-
-      const [rows] = await pool.query(
-        `SELECT candidate_name AS candidateName, COUNT(*) AS clicks
-         FROM applications
-         WHERE candidate_name IS NOT NULL
-           AND TRIM(candidate_name) <> ''
-           ${resumeFilter}
-         GROUP BY candidate_name
-         ORDER BY clicks DESC, candidateName ASC
-         LIMIT 12`
-      );
-      candidatePerformance = rows.map((row) => ({
-        candidateName: row.candidateName,
-        clicks: Number(row.clicks) || 0,
-      }));
-    } else if (await tableExists("recruiter_candidate_clicks")) {
-      const [rows] = await pool.query(
-        `SELECT candidate_name AS candidateName, COUNT(*) AS clicks
-         FROM recruiter_candidate_clicks
-         WHERE candidate_name IS NOT NULL AND candidate_name <> ''
-         GROUP BY candidate_name
-         ORDER BY clicks DESC, candidateName ASC
-         LIMIT 12`
-      );
-      candidatePerformance = rows.map((row) => ({
-        candidateName: row.candidateName,
-        clicks: Number(row.clicks) || 0,
       }));
     }
 
@@ -370,7 +456,6 @@ router.get("/api/admin/dashboard", async (_req, res) => {
 
     return res.status(200).json({
       recruiterPerformance,
-      candidatePerformance,
       totalResumeCount,
       recruiterResumeUploads,
       topResumesByJob,
@@ -774,7 +859,6 @@ router.get("/api/admin/revenue", async (req, res) => {
           totalExpense: 0,
           netProfit: 0,
         },
-        dailyTrend: [],
       });
     }
 
@@ -785,6 +869,7 @@ router.get("/api/admin/revenue", async (req, res) => {
         expense,
         profit,
         reason,
+        photo,
         entry_type AS entryType,
         created_at AS createdAt
       FROM money_sum
@@ -801,16 +886,6 @@ router.get("/api/admin/revenue", async (req, res) => {
     const totalExpense = toMoneyNumber(summaryRows?.[0]?.totalExpense);
     const netProfit = Math.round((totalIntake - totalExpense) * 100) / 100;
 
-    const [trendRows] = await pool.query(
-      `SELECT
-        DATE(created_at) AS date,
-        COALESCE(SUM(company_rev), 0) AS intake,
-        COALESCE(SUM(expense), 0) AS expense
-      FROM money_sum
-      GROUP BY DATE(created_at)
-      ORDER BY DATE(created_at) ASC`
-    );
-
     return res.status(200).json({
       entries: rows.map((row) => ({
         id: Number(row.id),
@@ -818,6 +893,7 @@ router.get("/api/admin/revenue", async (req, res) => {
         expense: toMoneyNumber(row.expense),
         profit: toMoneyNumber(row.profit),
         reason: row.reason || "",
+        photo: normalizePhotoValue(row.photo),
         entryType: normalizeRevenueEntryType(row.entryType) || (toMoneyNumber(row.companyRev) > 0 ? "intake" : "expense"),
         createdAt: row.createdAt,
       })),
@@ -826,16 +902,6 @@ router.get("/api/admin/revenue", async (req, res) => {
         totalExpense,
         netProfit,
       },
-      dailyTrend: trendRows.map((row) => {
-        const intake = toMoneyNumber(row.intake);
-        const expense = toMoneyNumber(row.expense);
-        return {
-          date: row.date,
-          intake,
-          expense,
-          net: Math.round((intake - expense) * 100) / 100,
-        };
-      }),
     });
   } catch (error) {
     return res.status(500).json({
@@ -845,14 +911,43 @@ router.get("/api/admin/revenue", async (req, res) => {
   }
 });
 
-router.post("/api/admin/revenue/entries", async (req, res) => {
+router.get("/api/admin/recruiters/list", async (req, res) => {
+  if (!ensureAdminAuthorized(req, res)) return;
+
+  try {
+    const hasRoleColumn = await columnExists("recruiter", "role");
+    const roleFilter = hasRoleColumn ? "WHERE LOWER(TRIM(role)) = 'recruiter'" : "";
+    const [rows] = await pool.query(
+      `SELECT rid, name
+       FROM recruiter
+       ${roleFilter}
+       ORDER BY name ASC, rid ASC`,
+    );
+
+    return res.status(200).json({
+      recruiters: rows.map((row) => ({
+        rid: row.rid,
+        name: row.name,
+      })),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch recruiters list.",
+      error: error.message,
+    });
+  }
+});
+
+router.post("/api/admin/revenue/entries", parseRevenueUpload, async (req, res) => {
   if (!ensureAdminAuthorized(req, res)) return;
 
   await ensureMoneySumTable();
 
   const entryType = normalizeRevenueEntryType(req.body?.entryType);
   const amount = toPositiveMoney(req.body?.amount);
-  const reason = String(req.body?.reason || "").trim();
+  const reasonCategory = req.body?.reasonCategory;
+  const otherReason = req.body?.otherReason;
+  const recruiterRid = req.body?.recruiterRid;
 
   if (!entryType || amount === null) {
     return res.status(400).json({
@@ -860,15 +955,36 @@ router.post("/api/admin/revenue/entries", async (req, res) => {
     });
   }
 
-  if (entryType === "expense" && !reason) {
+  let recruiterName = "";
+  if (
+    normalizeRevenueReasonCategory(reasonCategory) === "salary" &&
+    String(recruiterRid || "").trim()
+  ) {
+    try {
+      const [recruiterRows] = await pool.query(
+        "SELECT name FROM recruiter WHERE rid = ? LIMIT 1",
+        [String(recruiterRid).trim()],
+      );
+      recruiterName = recruiterRows?.[0]?.name || "";
+    } catch {}
+  }
+
+  const reasonResult = revenueReasonFromPayload({
+    reasonCategory,
+    otherReason,
+    recruiterRid,
+    recruiterName,
+  });
+  if (reasonResult.error) {
     return res.status(400).json({
-      message: "reason is required for expense entries.",
+      message: reasonResult.error,
     });
   }
 
   const companyRev = entryType === "intake" ? amount : 0;
   const expense = entryType === "expense" ? amount : 0;
-  const safeReason = reason || "";
+  const safeReason = reasonResult.reason || "";
+  const safePhoto = toRevenueAttachmentDataUrl(req.file) || null;
 
   const connection = await pool.getConnection();
   try {
@@ -882,9 +998,9 @@ router.post("/api/admin/revenue/entries", async (req, res) => {
 
     const [insertResult] = await connection.query(
       `INSERT INTO money_sum
-        (company_rev, expense, profit, reason, entry_type)
-       VALUES (?, ?, ?, ?, ?)`,
-      [companyRev, expense, nextProfit, safeReason, entryType]
+        (company_rev, expense, profit, reason, photo, entry_type)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [companyRev, expense, nextProfit, safeReason, safePhoto, entryType]
     );
 
     const [entryRows] = await connection.query(
@@ -894,6 +1010,7 @@ router.post("/api/admin/revenue/entries", async (req, res) => {
         expense,
         profit,
         reason,
+        photo,
         entry_type AS entryType,
         created_at AS createdAt
       FROM money_sum
@@ -912,6 +1029,7 @@ router.post("/api/admin/revenue/entries", async (req, res) => {
             expense: toMoneyNumber(entryRows[0].expense),
             profit: toMoneyNumber(entryRows[0].profit),
             reason: entryRows[0].reason || "",
+            photo: normalizePhotoValue(entryRows[0].photo),
             entryType: normalizeRevenueEntryType(entryRows[0].entryType),
             createdAt: entryRows[0].createdAt,
           }

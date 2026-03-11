@@ -43,8 +43,8 @@ export const fetchAllRecruiterStatuses = ({ sortBy = "submitted", sortOrder = "d
   );
 };
 
-export const fetchJobAdderDashboard = () =>
-  request(`${API_BASE_URL}/api/dashboard/job-adder`, {}, "Failed to fetch job adder dashboard.");
+export const fetchTeamLeaderDashboard = () =>
+  request(`${API_BASE_URL}/api/dashboard/team-leader`, {}, "Failed to fetch team leader dashboard.");
 
 export const fetchRecruiterDashboard = (rid, { startDate = "", endDate = "" } = {}) => {
   const params = new URLSearchParams();

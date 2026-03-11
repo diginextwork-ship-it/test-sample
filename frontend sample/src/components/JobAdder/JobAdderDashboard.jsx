@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
-import { fetchJobAdderDashboard } from "../../services/performanceService";
+import { fetchTeamLeaderDashboard } from "../../services/performanceService";
 import DashboardOverview from "./DashboardOverview";
 import RecruiterPerformanceTable from "./RecruiterPerformanceTable";
 import ResumeStatusManager from "./ResumeStatusManager";
 
-export default function JobAdderDashboard({ jobsManagementContent }) {
+export default function TeamLeaderDashboard({ jobsManagementContent }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [overviewData, setOverviewData] = useState(null);
   const [loadingOverview, setLoadingOverview] = useState(true);
   const [overviewError, setOverviewError] = useState("");
+  const [performanceRefreshKey, setPerformanceRefreshKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -16,12 +17,12 @@ export default function JobAdderDashboard({ jobsManagementContent }) {
       setLoadingOverview(true);
       setOverviewError("");
       try {
-        const data = await fetchJobAdderDashboard();
+        const data = await fetchTeamLeaderDashboard();
         if (!active) return;
         setOverviewData(data);
       } catch (error) {
         if (!active) return;
-        setOverviewError(error.message || "Failed to load job adder overview.");
+        setOverviewError(error.message || "Failed to load team leader overview.");
       } finally {
         if (active) setLoadingOverview(false);
       }
@@ -33,7 +34,7 @@ export default function JobAdderDashboard({ jobsManagementContent }) {
   }, []);
 
   return (
-    <section className="job-adder-dashboard">
+    <section className="team-leader-dashboard">
       <div className="dashboard-tabs">
         <button
           type="button"
@@ -68,8 +69,8 @@ export default function JobAdderDashboard({ jobsManagementContent }) {
       {activeTab === "jobs" ? jobsManagementContent : null}
       {activeTab === "performance" ? (
         <>
-          <ResumeStatusManager />
-          <RecruiterPerformanceTable />
+          <ResumeStatusManager onStatusUpdated={() => setPerformanceRefreshKey((prev) => prev + 1)} />
+          <RecruiterPerformanceTable refreshKey={performanceRefreshKey} />
         </>
       ) : null}
     </section>

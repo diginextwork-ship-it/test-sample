@@ -428,6 +428,7 @@ const ensureMoneySumTable = async () => {
       expense DECIMAL(14,2) NOT NULL DEFAULT 0,
       profit DECIMAL(14,2) NOT NULL DEFAULT 0,
       reason TEXT NULL,
+      photo LONGTEXT NULL,
       entry_type VARCHAR(20) NOT NULL DEFAULT 'expense',
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -456,6 +457,20 @@ const ensureMoneySumTable = async () => {
 
   if (!(await columnExists("money_sum", "reason"))) {
     await pool.query("ALTER TABLE money_sum ADD COLUMN reason TEXT NULL");
+  }
+  const reasonMetadata = await getColumnMetadata("money_sum", "reason");
+  const reasonType = String(reasonMetadata?.dataType || "").toLowerCase();
+  if (reasonType && reasonType !== "text" && reasonType !== "mediumtext" && reasonType !== "longtext") {
+    await pool.query("ALTER TABLE money_sum MODIFY COLUMN reason TEXT NULL");
+  }
+
+  if (!(await columnExists("money_sum", "photo"))) {
+    await pool.query("ALTER TABLE money_sum ADD COLUMN photo LONGTEXT NULL");
+  }
+  const photoMetadata = await getColumnMetadata("money_sum", "photo");
+  const photoType = String(photoMetadata?.dataType || "").toLowerCase();
+  if (photoType && photoType !== "longtext") {
+    await pool.query("ALTER TABLE money_sum MODIFY COLUMN photo LONGTEXT NULL");
   }
 
   if (!(await columnExists("money_sum", "entry_type"))) {

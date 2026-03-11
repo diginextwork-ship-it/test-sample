@@ -2,17 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchMyJobs } from "../../services/jobAccessService";
 import { fetchJobResumeStatuses, updateJobResumeStatus } from "../../services/performanceService";
 
-const STATUS_OPTIONS = [
-  "pending",
-  "verified",
-  "walk_in",
-  "selected",
-  "rejected",
-  "joined",
-  "dropout",
-  "on_hold",
-];
-
 const formatLabel = (value) =>
   String(value || "")
     .replace(/_/g, " ")
@@ -25,7 +14,7 @@ const formatDateTime = (value) => {
   return parsed.toLocaleString();
 };
 
-export default function ResumeStatusManager() {
+export default function ResumeStatusManager({ onStatusUpdated }) {
   const [jobs, setJobs] = useState([]);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [resumes, setResumes] = useState([]);
@@ -103,6 +92,7 @@ export default function ResumeStatusManager() {
         )
       );
       setMessage(`Updated ${resume.resId} to ${formatLabel(status)}.`);
+      onStatusUpdated?.();
     } catch (updateError) {
       setError(updateError.message || "Failed to update status.");
     }
@@ -152,6 +142,7 @@ export default function ResumeStatusManager() {
                 <th>File</th>
                 <th>ATS Match</th>
                 <th>Status</th>
+                <th>Action</th>
                 <th>Updated</th>
               </tr>
             </thead>
@@ -168,16 +159,31 @@ export default function ResumeStatusManager() {
                       : `${resume.atsMatchPercentage}%`}
                   </td>
                   <td>
-                    <select
-                      value={resume.status || "pending"}
-                      onChange={(event) => handleStatusChange(resume, event.target.value)}
-                    >
-                      {STATUS_OPTIONS.map((statusOption) => (
-                        <option key={statusOption} value={statusOption}>
-                          {formatLabel(statusOption)}
-                        </option>
-                      ))}
-                    </select>
+                    <span className={`status-pill status-${resume.status || "pending"}`}>
+                      {formatLabel(resume.status || "pending")}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="resume-status-actions">
+                      <button
+                        type="button"
+                        className={`resume-action-btn resume-action-select ${
+                          resume.status === "selected" ? "active" : ""
+                        }`}
+                        onClick={() => handleStatusChange(resume, "selected")}
+                      >
+                        Select
+                      </button>
+                      <button
+                        type="button"
+                        className={`resume-action-btn resume-action-reject ${
+                          resume.status === "rejected" ? "active" : ""
+                        }`}
+                        onClick={() => handleStatusChange(resume, "rejected")}
+                      >
+                        Reject
+                      </button>
+                    </div>
                   </td>
                   <td>{formatDateTime(resume.updatedAt || resume.uploadedAt)}</td>
                 </tr>
