@@ -42,6 +42,11 @@ const parseRevenueUpload = (req, res, next) => {
   });
 };
 
+const normalizeJobJid = (value) => {
+  const normalized = String(value || "").trim();
+  return normalized || null;
+};
+
 const tableExists = async (tableName) => {
   try {
     const [rows] = await pool.query(
@@ -586,7 +591,7 @@ router.get("/api/admin/job-alerts", async (req, res) => {
 
     return res.status(200).json({
       jobs: rows.map((row) => ({
-        jobJid: Number(row.jobJid),
+        jobJid: String(row.jobJid || "").trim(),
         companyName: row.companyName,
         roleName: row.roleName,
         positionsOpen: Number(row.positionsOpen) || 1,
@@ -606,9 +611,9 @@ router.get("/api/admin/job-alerts", async (req, res) => {
 router.get("/api/admin/jobs/:jid/resumes", async (req, res) => {
   if (!ensureAdminAuthorized(req, res)) return;
 
-  const safeJobId = Number(req.params.jid);
-  if (!Number.isInteger(safeJobId) || safeJobId <= 0) {
-    return res.status(400).json({ message: "jid must be a positive integer." });
+  const safeJobId = normalizeJobJid(req.params.jid);
+  if (!safeJobId) {
+    return res.status(400).json({ message: "jid is required." });
   }
 
   try {
@@ -663,7 +668,7 @@ router.get("/api/admin/jobs/:jid/resumes", async (req, res) => {
 
     return res.status(200).json({
       job: {
-        jobJid: Number(jobs[0].jobJid),
+        jobJid: String(jobs[0].jobJid || "").trim(),
         companyName: jobs[0].companyName,
         roleName: jobs[0].roleName,
         positionsOpen: Number(jobs[0].positionsOpen) || 1,
@@ -699,9 +704,9 @@ router.get("/api/admin/jobs/:jid/resumes", async (req, res) => {
 router.post("/api/admin/jobs/:jid/resume-selections", async (req, res) => {
   if (!ensureAdminAuthorized(req, res)) return;
 
-  const safeJobId = Number(req.params.jid);
-  if (!Number.isInteger(safeJobId) || safeJobId <= 0) {
-    return res.status(400).json({ message: "jid must be a positive integer." });
+  const safeJobId = normalizeJobJid(req.params.jid);
+  if (!safeJobId) {
+    return res.status(400).json({ message: "jid is required." });
   }
 
   const { resId, selection_status, selection_note, selected_by_admin } = req.body || {};
@@ -732,7 +737,7 @@ router.post("/api/admin/jobs/:jid/resume-selections", async (req, res) => {
       return res.status(404).json({ message: "Resume not found." });
     }
 
-    if (Number(resumeRows[0].jobJid) !== safeJobId) {
+    if (String(resumeRows[0].jobJid || "").trim() !== safeJobId) {
       return res.status(400).json({
         message: "The provided resume is not associated with this job.",
       });
@@ -777,9 +782,9 @@ router.post("/api/admin/jobs/:jid/resume-selections", async (req, res) => {
 router.get("/api/admin/jobs/:jid/selection-summary", async (req, res) => {
   if (!ensureAdminAuthorized(req, res)) return;
 
-  const safeJobId = Number(req.params.jid);
-  if (!Number.isInteger(safeJobId) || safeJobId <= 0) {
-    return res.status(400).json({ message: "jid must be a positive integer." });
+  const safeJobId = normalizeJobJid(req.params.jid);
+  if (!safeJobId) {
+    return res.status(400).json({ message: "jid is required." });
   }
 
   try {
@@ -820,7 +825,7 @@ router.get("/api/admin/jobs/:jid/selection-summary", async (req, res) => {
 
     return res.status(200).json({
       summary: {
-        jobJid: Number(jobRows[0].jobJid),
+        jobJid: String(jobRows[0].jobJid || "").trim(),
         companyName: jobRows[0].companyName,
         roleName: jobRows[0].roleName,
         positionsOpen,

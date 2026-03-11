@@ -75,10 +75,9 @@ const normalizeAccessMode = (value) => {
   return "open";
 };
 
-const toPositiveInt = (value) => {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) return null;
-  return parsed;
+const normalizeJobJid = (value) => {
+  const normalized = String(value || "").trim();
+  return normalized || null;
 };
 
 const toNonNegativeInt = (value, fallback) => {
@@ -227,9 +226,9 @@ const authorizeRecruiterResourceView = (req, res, rid) => {
 };
 
 const checkJobAccess = async (recruiterId, jobId) => {
-  const safeJobId = toPositiveInt(jobId);
+  const safeJobId = normalizeJobJid(jobId);
   if (!safeJobId) {
-    return { canAccess: false, reason: "job_jid must be a positive integer." };
+    return { canAccess: false, reason: "job_jid is required." };
   }
 
   const hasAccessModeColumn = await columnExists("jobs", "access_mode");
@@ -251,7 +250,7 @@ const checkJobAccess = async (recruiterId, jobId) => {
   const job = jobRows[0];
   const accessMode = normalizeAccessMode(job.access_mode);
   const jobDetails = {
-    jid: Number(job.jid),
+    jid: String(job.jid || "").trim(),
     company_name: job.company_name || "",
     access_mode: accessMode,
   };
@@ -656,7 +655,7 @@ router.get(
       const total = Number(countRows?.[0]?.total) || 0;
       return res.status(200).json({
         jobs: jobs.map((job) => ({
-          jid: Number(job.jid),
+          jid: String(job.jid || "").trim(),
           company_name: job.company_name || "",
           role_name: job.role_name || "",
           city: job.city || "",
@@ -685,12 +684,12 @@ router.get(
   requireRoles("recruiter", "team leader", "team_leader"),
   async (req, res) => {
     const rid = String(req.params.rid || "").trim();
-    const safeJobId = toPositiveInt(req.params.jid);
+    const safeJobId = normalizeJobJid(req.params.jid);
     if (!rid) {
       return res.status(400).json({ message: "rid is required." });
     }
     if (!safeJobId) {
-      return res.status(400).json({ message: "jid must be a positive integer." });
+      return res.status(400).json({ message: "jid is required." });
     }
 
     if (!authorizeRecruiterResourceView(req, res, rid)) return;
@@ -729,7 +728,7 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
 
   const recruiterRid = String(req.body?.recruiter_rid || "").trim();
   const authRid = String(req.auth?.rid || "").trim();
-  const safeJobId = toPositiveInt(req.body?.job_jid);
+  const safeJobId = normalizeJobJid(req.body?.job_jid);
 
   if (!authRid || !recruiterRid || authRid !== recruiterRid) {
     return res.status(403).json({
@@ -741,7 +740,7 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
   if (!safeJobId) {
     return res.status(400).json({
       success: false,
-      error: "job_jid must be a positive integer.",
+      error: "job_jid is required.",
     });
   }
 
@@ -1004,9 +1003,9 @@ router.post(
     });
   }
 
-  const safeJobId = Number(job_jid);
-  if (!Number.isInteger(safeJobId) || safeJobId <= 0) {
-    return res.status(400).json({ message: "job_jid must be a positive integer." });
+  const safeJobId = normalizeJobJid(job_jid);
+  if (!safeJobId) {
+    return res.status(400).json({ message: "job_jid is required." });
   }
 
   const normalizedFilename = String(resumeFilename).trim();

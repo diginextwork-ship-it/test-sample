@@ -171,6 +171,10 @@ const buildJobAtsContext = (jobRow) => {
 };
 
 const toTrimmedString = (value) => String(value || "").trim();
+const normalizeJobJid = (value) => {
+  const normalized = toTrimmedString(value);
+  return normalized || null;
+};
 
 const normalizeAccessMode = (value) => {
   const normalized = String(value || "").trim().toLowerCase();
@@ -192,6 +196,47 @@ const dedupeStringList = (values) => {
   return result;
 };
 
+const ensureJobIdSequenceTable = async (connection) => {
+  await connection.query(
+    `CREATE TABLE IF NOT EXISTS job_id_sequence (
+      seq_id BIGINT AUTO_INCREMENT PRIMARY KEY
+    )`
+  );
+};
+
+const syncJobIdSequenceWithJobs = async (connection) => {
+  const [maxRows] = await connection.query(
+    `SELECT COALESCE(MAX(CAST(SUBSTRING(jid, 5) AS UNSIGNED)), 0) AS maxJidNumber
+     FROM jobs
+     WHERE jid REGEXP '^JID-[0-9]+$'`
+  );
+  const maxJidNumber = Number(maxRows?.[0]?.maxJidNumber) || 0;
+
+  const [autoIncrementRows] = await connection.query(
+    `SELECT COALESCE(AUTO_INCREMENT, 1) AS autoIncrementValue
+     FROM information_schema.tables
+     WHERE table_schema = DATABASE()
+       AND table_name = 'job_id_sequence'
+     LIMIT 1`
+  );
+  const autoIncrementValue = Number(autoIncrementRows?.[0]?.autoIncrementValue) || 1;
+
+  if (autoIncrementValue <= maxJidNumber) {
+    await connection.query(`ALTER TABLE job_id_sequence AUTO_INCREMENT = ${maxJidNumber + 1}`);
+  }
+};
+
+const allocateNextJobJid = async (connection) => {
+  await ensureJobIdSequenceTable(connection);
+  await syncJobIdSequenceWithJobs(connection);
+  const [sequenceResult] = await connection.query("INSERT INTO job_id_sequence VALUES ()");
+  const sequenceValue = Number(sequenceResult.insertId);
+  if (!Number.isInteger(sequenceValue) || sequenceValue <= 0) {
+    throw new Error("Failed to allocate next job jid.");
+  }
+  return `JID-${sequenceValue}`;
+};
+
 const getActiveAccessCount = async (jobId) => {
   const [rows] = await pool.query(
     `SELECT COUNT(*) AS total
@@ -203,9 +248,9 @@ const getActiveAccessCount = async (jobId) => {
 };
 
 const requireOwnedJob = async (req, res, next) => {
-  const safeJobId = Number(req.params.jid);
-  if (!Number.isInteger(safeJobId) || safeJobId <= 0) {
-    return res.status(400).json({ message: "jid must be a positive integer." });
+  const safeJobId = normalizeJobJid(req.params.jid);
+  if (!safeJobId) {
+    return res.status(400).json({ message: "jid is required." });
   }
 
   try {
@@ -482,8 +527,8 @@ router.post(
       });
     }
 
-    const insertColumns = ["recruiter_rid", "company_name", "role_name"];
-    const insertValues = [recruiter_rid.trim(), company_name.trim(), role_name.trim()];
+    const insertColumns = ["jid", "recruiter_rid", "company_name", "role_name"];
+    const insertValues = [null, recruiter_rid.trim(), company_name.trim(), role_name.trim()];
 
     if (hasCityColumn) {
       insertColumns.push("city");
@@ -541,9 +586,11 @@ router.post(
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
+      const generatedJobJid = await allocateNextJobJid(connection);
+      insertValues[0] = generatedJobJid;
 
       const placeholders = insertColumns.map(() => "?").join(", ");
-      const [result] = await connection.query(
+      await connection.query(
         `INSERT INTO jobs (${insertColumns.join(", ")}) VALUES (${placeholders})`,
         insertValues
       );
@@ -559,7 +606,7 @@ router.post(
                granted_by = VALUES(granted_by),
                granted_at = CURRENT_TIMESTAMP,
                notes = VALUES(notes)`,
-            [result.insertId, recruiterId, authRid, normalizedAccessNotes]
+            [generatedJobJid, recruiterId, authRid, normalizedAccessNotes]
           );
         }
       }
@@ -578,7 +625,7 @@ router.post(
         message: "Job created successfully.",
         warning,
         job: {
-          jid: result.insertId,
+          jid: generatedJobJid,
           recruiter_rid: recruiter_rid.trim(),
           city: safeCity,
           state: safeState,
@@ -623,9 +670,9 @@ router.post("/api/applications/parse-resume", async (req, res) => {
       });
     }
 
-    const safeJobId = Number(jid);
-    if (!Number.isInteger(safeJobId) || safeJobId <= 0) {
-      return res.status(400).json({ message: "jid must be a positive integer." });
+    const safeJobId = normalizeJobJid(jid);
+    if (!safeJobId) {
+      return res.status(400).json({ message: "jid is required." });
     }
 
     const extension = getResumeExtension(resumeFilename);
@@ -850,7 +897,7 @@ router.post(
           return res.status(404).json({ message: "Resume not found." });
         }
 
-        if (Number(resumeRows[0].jobJid) !== req.ownedJob.jid) {
+        if (toTrimmedString(resumeRows[0].jobJid) !== req.ownedJob.jid) {
           await connection.rollback();
           return res.status(400).json({
             message: "The provided resume does not belong to this job.",
@@ -1147,9 +1194,9 @@ router.post("/api/applications", async (req, res) => {
       });
     }
 
-    const safeJobId = Number(jid);
-    if (!Number.isInteger(safeJobId) || safeJobId <= 0) {
-      return res.status(400).json({ message: "jid must be a positive integer." });
+    const safeJobId = normalizeJobJid(jid);
+    if (!safeJobId) {
+      return res.status(400).json({ message: "jid is required." });
     }
 
     const extension = getResumeExtension(resumeFilename);

@@ -43,6 +43,13 @@ export default function AdminPanel({ setCurrentPage, onLogout }) {
       stat: "Finance tracking",
       page: "adminrevenue",
     },
+    {
+      title: "Attendance system",
+      description:
+        "Track intake and expenses (salaries, electricity bills, client payments) with charts and table.",
+      stat: "Add/update/view",
+      page: "attendance panel",
+    },
   ];
 
   return (
