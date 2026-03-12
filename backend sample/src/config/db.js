@@ -50,7 +50,6 @@ const getDbConfig = () => {
       ),
       ssl: resolveSslConfig(host),
       connectTimeout: 60000, // 60 seconds for initial connection
-      acquireTimeout: 60000, // 60 seconds to acquire connection from pool
     };
   }
 
@@ -71,7 +70,6 @@ const getDbConfig = () => {
     database: process.env.DB_NAME,
     ssl: resolveSslConfig(host),
     connectTimeout: 60000, // 60 seconds for initial connection
-    acquireTimeout: 60000, // 60 seconds to acquire connection from pool
   };
 };
 
@@ -161,6 +159,54 @@ const buildColumnSql = (metadata, fallbackSql) => {
       ? ` COLLATE ${metadata.collationName}`
       : "";
   return `${baseType}${collationClause}`;
+};
+
+const ensureColumnMatchesReference = async ({
+  tableName,
+  columnName,
+  referenceTableName,
+  referenceColumnName,
+  fallbackSql,
+  nullable = true,
+  constraintName,
+  onDelete = "SET NULL",
+  onUpdate = "CASCADE",
+}) => {
+  const referenceMetadata = await getColumnMetadata(
+    referenceTableName,
+    referenceColumnName,
+  );
+  const targetColumnSql = buildColumnSql(referenceMetadata, fallbackSql);
+  const nullSql = nullable ? "NULL" : "NOT NULL";
+  const currentMetadata = await getColumnMetadata(tableName, columnName);
+  const currentColumnSql = buildColumnSql(currentMetadata, fallbackSql);
+  const needsColumnSync =
+    !currentMetadata ||
+    String(currentColumnSql).toLowerCase() !== String(targetColumnSql).toLowerCase();
+
+  if (needsColumnSync && constraintName && (await constraintExists(tableName, constraintName))) {
+    await pool.query(`ALTER TABLE ${tableName} DROP FOREIGN KEY ${constraintName}`);
+  }
+
+  if (!currentMetadata) {
+    await pool.query(
+      `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${targetColumnSql} ${nullSql}`,
+    );
+  } else if (needsColumnSync) {
+    await pool.query(
+      `ALTER TABLE ${tableName} MODIFY COLUMN ${columnName} ${targetColumnSql} ${nullSql}`,
+    );
+  }
+
+  if (constraintName && !(await constraintExists(tableName, constraintName))) {
+    await pool.query(
+      `ALTER TABLE ${tableName}
+       ADD CONSTRAINT ${constraintName}
+       FOREIGN KEY (${columnName}) REFERENCES ${referenceTableName}(${referenceColumnName})
+       ON DELETE ${onDelete}
+       ON UPDATE ${onUpdate}`,
+    );
+  }
 };
 
 const ensureJobsTableColumns = async () => {
@@ -338,12 +384,15 @@ const ensureRecruiterAttendanceTable = async () => {
 };
 
 const ensureResumesDataTable = async () => {
+  const jobJidMetadata = await getColumnMetadata("jobs", "jid");
+  const jobJidColumnSql = buildColumnSql(jobJidMetadata, "VARCHAR(30)");
+
   await pool.query(
     `CREATE TABLE IF NOT EXISTS resumes_data (
       res_id VARCHAR(30) PRIMARY KEY,
       rid VARCHAR(20) NOT NULL,
       applicant_name VARCHAR(255) NULL,
-      job_jid INT NULL,
+      job_jid ${jobJidColumnSql} NULL,
       resume LONGBLOB NOT NULL,
       resume_filename VARCHAR(255) NOT NULL,
       resume_type VARCHAR(10) NOT NULL,
@@ -365,9 +414,17 @@ const ensureResumesDataTable = async () => {
     )`,
   );
 
-  if (!(await columnExists("resumes_data", "job_jid"))) {
-    await pool.query("ALTER TABLE resumes_data ADD COLUMN job_jid INT NULL");
-  }
+  await ensureColumnMatchesReference({
+    tableName: "resumes_data",
+    columnName: "job_jid",
+    referenceTableName: "jobs",
+    referenceColumnName: "jid",
+    fallbackSql: "VARCHAR(30)",
+    nullable: true,
+    constraintName: "fk_resumes_data_job",
+    onDelete: "SET NULL",
+    onUpdate: "CASCADE",
+  });
 
   if (!(await columnExists("resumes_data", "applicant_name"))) {
     await pool.query(
@@ -439,6 +496,18 @@ const ensureApplicationColumns = async () => {
 
   if (!hasApplicationsTable) return;
 
+  await ensureColumnMatchesReference({
+    tableName: "applications",
+    columnName: "job_jid",
+    referenceTableName: "jobs",
+    referenceColumnName: "jid",
+    fallbackSql: "VARCHAR(30)",
+    nullable: false,
+    constraintName: "fk_applications_job",
+    onDelete: "CASCADE",
+    onUpdate: "CASCADE",
+  });
+
   if (await columnExists("applications", "grading_system")) {
     await pool.query("ALTER TABLE applications DROP COLUMN grading_system");
   }
@@ -481,7 +550,7 @@ const ensureApplicationColumns = async () => {
 const ensureJobResumeSelectionTable = async () => {
   const jobJidMetadata = await getColumnMetadata("jobs", "jid");
   const resumeIdMetadata = await getColumnMetadata("resumes_data", "res_id");
-  const jobJidColumnSql = buildColumnSql(jobJidMetadata, "INT");
+  const jobJidColumnSql = buildColumnSql(jobJidMetadata, "VARCHAR(30)");
   const resumeIdColumnSql = buildColumnSql(resumeIdMetadata, "VARCHAR(30)");
 
   await pool.query(
@@ -505,6 +574,18 @@ const ensureJobResumeSelectionTable = async () => {
         ON UPDATE CASCADE
     )`,
   );
+
+  await ensureColumnMatchesReference({
+    tableName: "job_resume_selection",
+    columnName: "job_jid",
+    referenceTableName: "jobs",
+    referenceColumnName: "jid",
+    fallbackSql: "VARCHAR(30)",
+    nullable: false,
+    constraintName: "fk_job_resume_selection_job",
+    onDelete: "CASCADE",
+    onUpdate: "CASCADE",
+  });
 
   const selectionStatusMetadata = await getColumnMetadata(
     "job_resume_selection",
@@ -631,6 +712,9 @@ const ensureMoneySumTable = async () => {
 };
 
 const ensureJobAccessControlSchema = async () => {
+  const jobJidMetadata = await getColumnMetadata("jobs", "jid");
+  const jobJidColumnSql = buildColumnSql(jobJidMetadata, "VARCHAR(30)");
+
   if (await tableExists("jobs")) {
     if (!(await columnExists("jobs", "access_mode"))) {
       await pool.query(
@@ -646,7 +730,7 @@ const ensureJobAccessControlSchema = async () => {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS job_recruiter_access (
       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-      job_jid INT UNSIGNED NOT NULL,
+      job_jid ${jobJidColumnSql} NOT NULL,
       recruiter_rid VARCHAR(20) NOT NULL,
       granted_by VARCHAR(20) NOT NULL,
       granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -669,6 +753,18 @@ const ensureJobAccessControlSchema = async () => {
         ON UPDATE CASCADE
     )`,
   );
+
+  await ensureColumnMatchesReference({
+    tableName: "job_recruiter_access",
+    columnName: "job_jid",
+    referenceTableName: "jobs",
+    referenceColumnName: "jid",
+    fallbackSql: "VARCHAR(30)",
+    nullable: false,
+    constraintName: "fk_job_recruiter_access_job",
+    onDelete: "CASCADE",
+    onUpdate: "CASCADE",
+  });
 
   if (!(await columnExists("job_recruiter_access", "is_active"))) {
     await pool.query(

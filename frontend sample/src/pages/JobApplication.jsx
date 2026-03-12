@@ -104,6 +104,9 @@ export default function JobApplication({ setCurrentPage }) {
         resumeFilename: file.name,
         resumeMimeType: file.type,
         parsedData: data?.parsedData || null,
+        atsScore: data?.atsScore ?? null,
+        atsMatchPercentage: data?.atsMatchPercentage ?? null,
+        atsRawJson: data?.atsRawJson || null,
       };
       setParsedResume(parsedPayload);
       setResumeMessageType("success");
@@ -200,6 +203,10 @@ export default function JobApplication({ setCurrentPage }) {
           resumeBase64: parsedResumePayload.resumeBase64,
           resumeFilename: parsedResumePayload.resumeFilename || resumeFile.name,
           resumeMimeType: parsedResumePayload.resumeMimeType || resumeFile.type,
+          parsedData: parsedResumePayload.parsedData || null,
+          atsScore: parsedResumePayload.atsScore ?? null,
+          atsMatchPercentage: parsedResumePayload.atsMatchPercentage ?? null,
+          atsRawJson: parsedResumePayload.atsRawJson || null,
         }),
       });
 
@@ -258,7 +265,7 @@ export default function JobApplication({ setCurrentPage }) {
                 required
               />
               {isParsingResume ? (
-                <p>Parsing resume and calculating ATS score. Kindly be patient as the process may take a while.</p>
+                <p>Kindly be patient as the process may take a while.</p>
               ) : null}
               {resumeMessage ? (
                 <p
@@ -390,4 +397,3 @@ export default function JobApplication({ setCurrentPage }) {
     </main>
   );
 }
-

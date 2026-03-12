@@ -176,6 +176,13 @@ const normalizeJobJid = (value) => {
   return normalized || null;
 };
 
+const toAtsNumberOrNull = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return Number(parsed.toFixed(2));
+};
+
 const normalizeAccessMode = (value) => {
   const normalized = String(value || "").trim().toLowerCase();
   if (normalized === "open" || normalized === "restricted") {
@@ -729,6 +736,9 @@ router.post("/api/applications/parse-resume", async (req, res) => {
       message: "Resume parsed successfully.",
       parsedData: parsed.parsedData,
       autofill: buildAutofillFromParsedData(parsed.parsedData),
+      atsScore: parsed.atsScore ?? null,
+      atsMatchPercentage: parsed.atsMatchPercentage ?? null,
+      atsRawJson: parsed.atsRawJson ?? null,
       parser_meta: parsed.parserMeta || null,
     });
   } catch (error) {
@@ -1241,11 +1251,42 @@ router.post("/api/applications", async (req, res) => {
       return res.status(400).json({ message: validation.message });
     }
 
-    const parsed = await parseResumeWithAts({
-      resumeBuffer,
-      resumeFilename: String(resumeFilename).trim(),
-      jobDescription: buildJobAtsContext(selectedJob),
-    });
+    const clientParsedData =
+      mergedBody?.parsedData && typeof mergedBody.parsedData === "object" && !Array.isArray(mergedBody.parsedData)
+        ? mergedBody.parsedData
+        : null;
+    const clientAtsScore = toAtsNumberOrNull(mergedBody?.atsScore);
+    const clientAtsMatchPercentage = toAtsNumberOrNull(mergedBody?.atsMatchPercentage);
+    const clientAtsRawJson =
+      mergedBody?.atsRawJson && typeof mergedBody.atsRawJson === "object" && !Array.isArray(mergedBody.atsRawJson)
+        ? mergedBody.atsRawJson
+        : null;
+
+    const parsed =
+      clientParsedData
+        ? {
+            ok: true,
+            message: "",
+            parsedData: clientParsedData,
+            applicantName: extractApplicantName(clientParsedData),
+            atsScore: clientAtsScore,
+            atsMatchPercentage: clientAtsMatchPercentage,
+            atsRawJson:
+              clientAtsRawJson || {
+                ats_score: clientAtsScore,
+                ats_match_percentage: clientAtsMatchPercentage,
+                parsed_data: clientParsedData,
+              },
+            parserMeta: {
+              parsedDataSource: "client",
+              atsSource: "client",
+            },
+          }
+        : await parseResumeWithAts({
+            resumeBuffer,
+            resumeFilename: String(resumeFilename).trim(),
+            jobDescription: buildJobAtsContext(selectedJob),
+          });
     if (!parsed.ok) {
       return res.status(503).json({ message: parsed.message });
     }
