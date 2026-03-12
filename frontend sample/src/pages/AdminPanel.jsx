@@ -13,12 +13,6 @@ export default function AdminPanel({ setCurrentPage, onLogout }) {
       page: "admincreate",
     },
     {
-      title: "Resumes by RID",
-      description: "Track resumes submitted per recruiter ID.",
-      stat: `${dashboard.recruiterPerformance.length} recruiters`,
-      page: "adminridstats",
-    },
-    {
       title: "Top ATS Resumes",
       description: "Review top-matched resumes per job.",
       stat: `${dashboard.topResumesByJob.length} jobs`,
@@ -29,6 +23,12 @@ export default function AdminPanel({ setCurrentPage, onLogout }) {
       description: "Audit recruiter resume uploads.",
       stat: `${dashboard.totalResumeCount} total uploads`,
       page: "adminuploads",
+    },
+    {
+      title: "Candidate's Submitted Resumes",
+      description: "Review resumes submitted by candidates from the jobs search flow.",
+      stat: `${dashboard.candidateResumeCount} candidate uploads`,
+      page: "admincandidateresumes",
     },
     {
       title: "Manual Resume Selection",

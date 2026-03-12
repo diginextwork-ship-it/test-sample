@@ -11,9 +11,9 @@ import RecruiterLogin from "./pages/RecruiterLogin";
 import AdminLogin from "./pages/AdminLogin";
 import AdminPanel from "./pages/AdminPanel";
 import AdminCreateRecruiter from "./pages/admin/AdminCreateRecruiter";
-import AdminRidPerformance from "./pages/admin/AdminRidPerformance";
 import AdminTopResumes from "./pages/admin/AdminTopResumes";
 import AdminResumeUploads from "./pages/admin/AdminResumeUploads";
+import AdminCandidateResumes from "./pages/admin/AdminCandidateResumes";
 import AdminManualSelection from "./pages/admin/AdminManualSelection";
 import AdminRevenue from "./pages/admin/AdminRevenue";
 import AdminAttendance from "./pages/admin/AdminAttendance";
@@ -33,9 +33,9 @@ const PAGE_TO_PATH = {
   adminlogin: "/admin-login",
   adminpanel: "/admin-panel",
   admincreate: "/admin-panel/create-recruiter",
-  adminridstats: "/admin-panel/recruiter-performance",
   admintopresumes: "/admin-panel/top-resumes",
   adminuploads: "/admin-panel/recruiter-uploads",
+  admincandidateresumes: "/admin-panel/candidate-submitted-resumes",
   adminmanualselection: "/admin-panel/manual-selection",
   adminrevenue: "/admin-panel/revenue",
   adminattendance: "/admin-panel/attendance",
@@ -44,9 +44,9 @@ const PAGE_TO_PATH = {
 const ADMIN_ONLY_PAGES = new Set([
   "adminpanel",
   "admincreate",
-  "adminridstats",
   "admintopresumes",
   "adminuploads",
+  "admincandidateresumes",
   "adminmanualselection",
   "adminrevenue",
   "adminattendance",
@@ -73,9 +73,9 @@ const getPageFromPath = (pathname) => {
   if (normalizedPath === "/admin-login") return "adminlogin";
   if (normalizedPath === "/admin-panel") return "adminpanel";
   if (normalizedPath === "/admin-panel/create-recruiter") return "admincreate";
-  if (normalizedPath === "/admin-panel/recruiter-performance") return "adminridstats";
   if (normalizedPath === "/admin-panel/top-resumes") return "admintopresumes";
   if (normalizedPath === "/admin-panel/recruiter-uploads") return "adminuploads";
+  if (normalizedPath === "/admin-panel/candidate-submitted-resumes") return "admincandidateresumes";
   if (normalizedPath === "/admin-panel/manual-selection") return "adminmanualselection";
   if (normalizedPath === "/admin-panel/revenue") return "adminrevenue";
   if (normalizedPath === "/admin-panel/attendance") return "adminattendance";
@@ -161,12 +161,12 @@ export default function App() {
         return <AdminPanel setCurrentPage={setCurrentPage} onLogout={handleLogout} />;
       case "admincreate":
         return <AdminCreateRecruiter setCurrentPage={setCurrentPage} />;
-      case "adminridstats":
-        return <AdminRidPerformance setCurrentPage={setCurrentPage} />;
       case "admintopresumes":
         return <AdminTopResumes setCurrentPage={setCurrentPage} />;
       case "adminuploads":
         return <AdminResumeUploads setCurrentPage={setCurrentPage} />;
+      case "admincandidateresumes":
+        return <AdminCandidateResumes setCurrentPage={setCurrentPage} />;
       case "adminmanualselection":
         return <AdminManualSelection setCurrentPage={setCurrentPage} />;
       case "adminrevenue":

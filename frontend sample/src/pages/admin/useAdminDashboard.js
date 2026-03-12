@@ -3,8 +3,8 @@ import { API_BASE_URL, getAdminHeaders, readJsonResponse } from "./adminApi";
 
 export default function useAdminDashboard() {
   const [dashboard, setDashboard] = useState({
-    recruiterPerformance: [],
     totalResumeCount: 0,
+    candidateResumeCount: 0,
     recruiterResumeUploads: [],
     topResumesByJob: [],
   });
@@ -27,10 +27,8 @@ export default function useAdminDashboard() {
       }
 
       setDashboard({
-        recruiterPerformance: Array.isArray(data.recruiterPerformance)
-          ? data.recruiterPerformance
-          : [],
         totalResumeCount: Number(data.totalResumeCount) || 0,
+        candidateResumeCount: Number(data.candidateResumeCount) || 0,
         recruiterResumeUploads: Array.isArray(data.recruiterResumeUploads)
           ? data.recruiterResumeUploads
           : [],

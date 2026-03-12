@@ -397,32 +397,14 @@ router.use("/api/admin", requireAuth, requireRoles("admin"));
 
 router.get("/api/admin/dashboard", async (_req, res) => {
   try {
-    let recruiterPerformance = [];
     let totalResumeCount = 0;
+    let candidateResumeCount = 0;
     let recruiterResumeUploads = [];
     let topResumesByJob = [];
 
     if (await tableExists("resumes_data")) {
-      const [recruiterRows] = await pool.query(
-        `SELECT
-          rd.rid AS rid,
-          COALESCE(r.name, rd.rid) AS recruiterName,
-          COUNT(*) AS resumeCount
-         FROM resumes_data rd
-         LEFT JOIN recruiter r ON r.rid = rd.rid
-         GROUP BY rd.rid, recruiterName
-         ORDER BY resumeCount DESC, rd.rid ASC`
-      );
-
-      recruiterPerformance = recruiterRows.map((row) => ({
-        rid: row.rid,
-        recruiterName: row.recruiterName,
-        resumeCount: Number(row.resumeCount) || 0,
-      }));
-    }
-
-    if (await tableExists("resumes_data")) {
       const hasJobJidColumn = await columnExists("resumes_data", "job_jid");
+      const hasSubmittedByRoleColumn = await columnExists("resumes_data", "submitted_by_role");
       const hasApplicantNameColumn = await columnExists("resumes_data", "applicant_name");
       const hasAtsScoreColumn = await columnExists("resumes_data", "ats_score");
       const hasAtsMatchColumn = await columnExists("resumes_data", "ats_match_percentage");
@@ -442,6 +424,14 @@ router.get("/api/admin/dashboard", async (_req, res) => {
 
       const [countRows] = await pool.query("SELECT COUNT(*) AS totalResumeCount FROM resumes_data");
       totalResumeCount = Number(countRows?.[0]?.totalResumeCount) || 0;
+      if (hasSubmittedByRoleColumn) {
+        const [candidateCountRows] = await pool.query(
+          `SELECT COUNT(*) AS candidateResumeCount
+           FROM resumes_data
+           WHERE COALESCE(submitted_by_role, 'recruiter') = 'candidate'`
+        );
+        candidateResumeCount = Number(candidateCountRows?.[0]?.candidateResumeCount) || 0;
+      }
 
       const [rows] = await pool.query(
         `SELECT
@@ -579,14 +569,99 @@ router.get("/api/admin/dashboard", async (_req, res) => {
     }
 
     return res.status(200).json({
-      recruiterPerformance,
       totalResumeCount,
+      candidateResumeCount,
       recruiterResumeUploads,
       topResumesByJob,
     });
   } catch (error) {
     return res.status(500).json({
       message: "Failed to fetch admin dashboard.",
+      error: error.message,
+    });
+  }
+});
+
+router.get("/api/admin/candidate-resumes", async (req, res) => {
+  if (!ensureAdminAuthorized(req, res)) return;
+
+  try {
+    if (!(await tableExists("resumes_data"))) {
+      return res.status(200).json({
+        totalCount: 0,
+        resumes: [],
+      });
+    }
+
+    const hasSubmittedByRoleColumn = await columnExists("resumes_data", "submitted_by_role");
+    if (!hasSubmittedByRoleColumn) {
+      return res.status(200).json({
+        totalCount: 0,
+        resumes: [],
+      });
+    }
+
+    const hasApplicantNameColumn = await columnExists("resumes_data", "applicant_name");
+    const hasAtsScoreColumn = await columnExists("resumes_data", "ats_score");
+    const hasAtsMatchColumn = await columnExists("resumes_data", "ats_match_percentage");
+    const hasJobDescriptionColumn = await columnExists("jobs", "job_description");
+
+    const applicantNameSelect = hasApplicantNameColumn
+      ? "rd.applicant_name AS applicantName,"
+      : "NULL AS applicantName,";
+    const atsScoreSelect = hasAtsScoreColumn ? "rd.ats_score AS atsScore," : "NULL AS atsScore,";
+    const atsMatchSelect = hasAtsMatchColumn
+      ? "rd.ats_match_percentage AS atsMatchPercentage,"
+      : "NULL AS atsMatchPercentage,";
+    const jobDescriptionSelect = hasJobDescriptionColumn
+      ? "j.job_description AS jobDescription,"
+      : "NULL AS jobDescription,";
+
+    const [rows] = await pool.query(
+      `SELECT
+        rd.res_id AS resId,
+        rd.job_jid AS jobJid,
+        ${applicantNameSelect}
+        rd.resume_filename AS resumeFilename,
+        rd.resume_type AS resumeType,
+        ${atsScoreSelect}
+        ${atsMatchSelect}
+        rd.uploaded_at AS uploadedAt,
+        j.role_name AS roleName,
+        j.company_name AS companyName,
+        ${jobDescriptionSelect}
+        j.skills AS skills
+      FROM resumes_data rd
+      LEFT JOIN jobs j ON j.jid = rd.job_jid
+      WHERE COALESCE(rd.submitted_by_role, 'recruiter') = 'candidate'
+      ORDER BY rd.uploaded_at DESC, rd.res_id ASC`
+    );
+
+    return res.status(200).json({
+      totalCount: rows.length,
+      resumes: rows.map((row) => ({
+        resId: row.resId,
+        jobJid: row.jobJid ? String(row.jobJid).trim() : null,
+        applicantName: row.applicantName || null,
+        resumeFilename: row.resumeFilename || null,
+        resumeType: row.resumeType || null,
+        atsScore: row.atsScore === null || row.atsScore === undefined ? null : Number(row.atsScore),
+        atsMatchPercentage:
+          row.atsMatchPercentage === null || row.atsMatchPercentage === undefined
+            ? null
+            : Number(row.atsMatchPercentage),
+        uploadedAt: row.uploadedAt || null,
+        job: {
+          roleName: row.roleName || null,
+          companyName: row.companyName || null,
+          jobDescription: row.jobDescription || null,
+          skills: row.skills || null,
+        },
+      })),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch candidate submitted resumes.",
       error: error.message,
     });
   }

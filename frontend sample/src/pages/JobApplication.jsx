@@ -33,7 +33,7 @@ export default function JobApplication({ setCurrentPage }) {
       return null;
     }
   }, []);
-  const selectedJobId = Number(selectedJob?.id ?? selectedJob?.jid ?? 0);
+  const selectedJobId = String(selectedJob?.id ?? selectedJob?.jid ?? "").trim();
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -57,7 +57,7 @@ export default function JobApplication({ setCurrentPage }) {
     });
 
   const parseResumeAndAutofill = async (file) => {
-    if (!Number.isInteger(selectedJobId) || selectedJobId <= 0) {
+    if (!selectedJobId) {
       setResumeMessageType("error");
       setResumeMessage("Select a job first, then upload resume.");
       return;
@@ -161,7 +161,7 @@ export default function JobApplication({ setCurrentPage }) {
     setSubmitted(false);
     setSubmitMessage("");
 
-    if (!Number.isInteger(selectedJobId) || selectedJobId <= 0) {
+    if (!selectedJobId) {
       setSubmitMessage("No job selected. Please go back and choose a job first.");
       return;
     }
@@ -257,7 +257,9 @@ export default function JobApplication({ setCurrentPage }) {
                 onChange={handleResumeFileChange}
                 required
               />
-              {isParsingResume ? <p>Parsing resume and calculating ATS...</p> : null}
+              {isParsingResume ? (
+                <p>Parsing resume and calculating ATS score. Kindly be patient as the process may take a while.</p>
+              ) : null}
               {resumeMessage ? (
                 <p
                   className={

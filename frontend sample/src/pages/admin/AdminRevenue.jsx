@@ -29,6 +29,10 @@ export default function AdminRevenue({ setCurrentPage }) {
   const [entries, setEntries] = useState([]);
   const [recruiters, setRecruiters] = useState([]);
   const [summary, setSummary] = useState({ totalIntake: 0, totalExpense: 0, netProfit: 0 });
+  const [searchFilters, setSearchFilters] = useState({
+    amount: "",
+    reason: "",
+  });
   const [formData, setFormData] = useState({
     entryType: "expense",
     amount: "",
@@ -93,6 +97,18 @@ export default function AdminRevenue({ setCurrentPage }) {
     loadRecruiters();
   }, []);
 
+  const filteredEntries = entries.filter((item) => {
+    const amountQuery = searchFilters.amount.trim();
+    const reasonQuery = searchFilters.reason.trim().toLowerCase();
+    const itemExpense = String(Number(item.expense || 0));
+    const itemReason = String(item.reason || "").toLowerCase();
+
+    const matchesAmount = amountQuery ? itemExpense.includes(amountQuery) : true;
+    const matchesReason = reasonQuery ? itemReason.includes(reasonQuery) : true;
+
+    return matchesAmount && matchesReason;
+  });
+
   const handleInputChange = (event) => {
     const { name, value } = event.target;
     setFormData((prev) => {
@@ -106,6 +122,11 @@ export default function AdminRevenue({ setCurrentPage }) {
       }
       return { ...prev, [name]: value };
     });
+  };
+
+  const handleSearchChange = (event) => {
+    const { name, value } = event.target;
+    setSearchFilters((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleFileChange = (event) => {
@@ -324,8 +345,42 @@ export default function AdminRevenue({ setCurrentPage }) {
 
       <div className="admin-dashboard-card admin-card-large">
         <h2 style={{ marginTop: 0 }}>Revenue entries</h2>
+        <div
+          style={{
+            display: "grid",
+            gap: "12px",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            marginBottom: "16px",
+          }}
+        >
+          <div>
+            <label htmlFor="expenseSearchAmount">Search by expense amount</label>
+            <input
+              id="expenseSearchAmount"
+              name="amount"
+              type="text"
+              inputMode="decimal"
+              value={searchFilters.amount}
+              onChange={handleSearchChange}
+              placeholder="e.g. 5000 or 5000.50"
+            />
+          </div>
+          <div>
+            <label htmlFor="expenseSearchReason">Search by reason</label>
+            <input
+              id="expenseSearchReason"
+              name="reason"
+              type="text"
+              value={searchFilters.reason}
+              onChange={handleSearchChange}
+              placeholder="e.g. salary, rent, electricity"
+            />
+          </div>
+        </div>
         {entries.length === 0 ? (
           <p className="admin-chart-empty">No entries recorded yet.</p>
+        ) : filteredEntries.length === 0 ? (
+          <p className="admin-chart-empty">No expense entries match the current search.</p>
         ) : (
           <div className="admin-table-wrap">
             <table className="admin-table admin-table-wide">
@@ -343,7 +398,7 @@ export default function AdminRevenue({ setCurrentPage }) {
                 </tr>
               </thead>
               <tbody>
-                {entries.map((item) => (
+                {filteredEntries.map((item) => (
                   <tr key={item.id}>
                     <td>#{item.id}</td>
                     <td>{item.entryType}</td>
