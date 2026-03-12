@@ -1296,6 +1296,13 @@ router.post("/api/applications", async (req, res) => {
       name,
       phone,
       email,
+      hasPriorExperience,
+      experienceIndustry,
+      experienceIndustryOther,
+      currentSalary,
+      expectedSalary,
+      noticePeriod,
+      yearsOfExperience,
       latestEducationLevel,
       boardUniversity,
       institutionName,
@@ -1311,7 +1318,16 @@ router.post("/api/applications", async (req, res) => {
     const finalBoardUniversity = String(boardUniversity || autofill.boardUniversity || "").trim();
     const finalInstitutionName = String(institutionName || autofill.institutionName || "").trim();
     const finalAge = toNumberOrNull(age ?? autofill.age);
+    const normalizedHasPriorExperience = String(hasPriorExperience || "").trim().toLowerCase();
+    const finalHasPriorExperience = normalizedHasPriorExperience === "yes";
+    const finalExperienceIndustry = String(experienceIndustry || "").trim().toLowerCase();
+    const finalExperienceIndustryOther = String(experienceIndustryOther || "").trim();
+    const finalCurrentSalary = toNumberOrNull(currentSalary);
+    const finalExpectedSalary = toNumberOrNull(expectedSalary);
+    const finalNoticePeriod = String(noticePeriod || "").trim();
+    const finalYearsOfExperience = toNumberOrNull(yearsOfExperience);
     const parsedApplicantName = extractApplicantName(parsed.parsedData) || finalName || null;
+    const allowedIndustries = new Set(["it", "marketing", "sales", "finance", "others"]);
 
     if (
       !finalName ||
@@ -1328,6 +1344,43 @@ router.post("/api/applications", async (req, res) => {
       });
     }
 
+    if (!["yes", "no"].includes(normalizedHasPriorExperience)) {
+      return res.status(400).json({
+        message: "hasPriorExperience must be either 'yes' or 'no'.",
+      });
+    }
+
+    if (finalHasPriorExperience) {
+      if (
+        !allowedIndustries.has(finalExperienceIndustry) ||
+        finalCurrentSalary === null ||
+        finalExpectedSalary === null ||
+        !finalNoticePeriod ||
+        finalYearsOfExperience === null
+      ) {
+        return res.status(400).json({
+          message:
+            "experienceIndustry, currentSalary, expectedSalary, noticePeriod, and yearsOfExperience are required when prior experience is yes.",
+        });
+      }
+
+      if (finalExperienceIndustry === "others" && !finalExperienceIndustryOther) {
+        return res.status(400).json({
+          message: "Please specify the industry when selecting others.",
+        });
+      }
+    }
+
+    if (
+      finalCurrentSalary !== null && finalCurrentSalary < 0 ||
+      finalExpectedSalary !== null && finalExpectedSalary < 0 ||
+      finalYearsOfExperience !== null && finalYearsOfExperience < 0
+    ) {
+      return res.status(400).json({
+        message: "Experience salary and years values cannot be negative.",
+      });
+    }
+
     if (!/^\d{10}$/.test(finalPhone)) {
       return res.status(400).json({
         message: "Phone number must be exactly 10 digits.",
@@ -1337,6 +1390,7 @@ router.post("/api/applications", async (req, res) => {
     const hasJobJidColumn = await columnExists("resumes_data", "job_jid");
     const hasSubmittedByRoleColumn = await columnExists("resumes_data", "submitted_by_role");
     const hasApplicantNameColumn = await columnExists("resumes_data", "applicant_name");
+    const hasApplicantEmailColumn = await columnExists("resumes_data", "applicant_email");
     const hasAtsScoreColumn = await columnExists("resumes_data", "ats_score");
     const hasAtsMatchColumn = await columnExists("resumes_data", "ats_match_percentage");
     const hasAtsRawColumn = await columnExists("resumes_data", "ats_raw_json");
@@ -1361,6 +1415,13 @@ router.post("/api/applications", async (req, res) => {
             candidate_name,
             phone,
             email,
+            has_prior_experience,
+            experience_industry,
+            experience_industry_other,
+            current_salary,
+            expected_salary,
+            notice_period,
+            years_of_experience,
             latest_education_level,
             board_university,
             institution_name,
@@ -1371,12 +1432,21 @@ router.post("/api/applications", async (req, res) => {
             ats_match_percentage,
             ats_raw_json
           )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           safeJobId,
           finalName,
           finalPhone,
           finalEmail,
+          finalHasPriorExperience,
+          finalHasPriorExperience ? finalExperienceIndustry : null,
+          finalHasPriorExperience && finalExperienceIndustry === "others"
+            ? finalExperienceIndustryOther
+            : null,
+          finalHasPriorExperience ? finalCurrentSalary : null,
+          finalHasPriorExperience ? finalExpectedSalary : null,
+          finalHasPriorExperience ? finalNoticePeriod : null,
+          finalHasPriorExperience ? finalYearsOfExperience : null,
           finalLatestEducationLevel,
           finalBoardUniversity,
           finalInstitutionName,
@@ -1412,6 +1482,11 @@ router.post("/api/applications", async (req, res) => {
       if (hasApplicantNameColumn) {
         insertColumns.push("applicant_name");
         insertValues.push(parsedApplicantName);
+      }
+
+      if (hasApplicantEmailColumn) {
+        insertColumns.push("applicant_email");
+        insertValues.push(finalEmail);
       }
 
       if (hasAtsScoreColumn) {

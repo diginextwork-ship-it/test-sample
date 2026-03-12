@@ -69,6 +69,13 @@ CREATE TABLE IF NOT EXISTS applications (
   candidate_name VARCHAR(190) NOT NULL,
   phone VARCHAR(20) NOT NULL,
   email VARCHAR(190) NOT NULL,
+  has_prior_experience BOOLEAN NOT NULL DEFAULT FALSE,
+  experience_industry VARCHAR(100) NULL,
+  experience_industry_other VARCHAR(190) NULL,
+  current_salary DECIMAL(12,2) NULL,
+  expected_salary DECIMAL(12,2) NULL,
+  notice_period VARCHAR(100) NULL,
+  years_of_experience DECIMAL(4,1) NULL,
   latest_education_level VARCHAR(100) NOT NULL,
   board_university VARCHAR(190) NOT NULL,
   institution_name VARCHAR(190) NOT NULL,
@@ -88,6 +95,20 @@ ALTER TABLE applications
   DROP COLUMN IF EXISTS grading_system;
 ALTER TABLE applications
   DROP COLUMN IF EXISTS score;
+ALTER TABLE applications
+  ADD COLUMN IF NOT EXISTS has_prior_experience BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE applications
+  ADD COLUMN IF NOT EXISTS experience_industry VARCHAR(100) NULL;
+ALTER TABLE applications
+  ADD COLUMN IF NOT EXISTS experience_industry_other VARCHAR(190) NULL;
+ALTER TABLE applications
+  ADD COLUMN IF NOT EXISTS current_salary DECIMAL(12,2) NULL;
+ALTER TABLE applications
+  ADD COLUMN IF NOT EXISTS expected_salary DECIMAL(12,2) NULL;
+ALTER TABLE applications
+  ADD COLUMN IF NOT EXISTS notice_period VARCHAR(100) NULL;
+ALTER TABLE applications
+  ADD COLUMN IF NOT EXISTS years_of_experience DECIMAL(4,1) NULL;
 
 CREATE TABLE IF NOT EXISTS recruiter_candidate_clicks (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -105,6 +126,8 @@ CREATE TABLE IF NOT EXISTS resumes_data (
   rid VARCHAR(20) NOT NULL,
   job_jid INT NULL,
   submitted_by_role VARCHAR(30) NULL DEFAULT 'recruiter',
+  applicant_name VARCHAR(255) NULL,
+  applicant_email VARCHAR(190) NULL,
   is_accepted BOOLEAN NOT NULL DEFAULT FALSE,
   accepted_at TIMESTAMP NULL DEFAULT NULL,
   accepted_by_admin VARCHAR(50) NULL,
@@ -128,6 +151,10 @@ CREATE TABLE IF NOT EXISTS resumes_data (
 
 ALTER TABLE resumes_data
   ADD COLUMN IF NOT EXISTS submitted_by_role VARCHAR(30) NULL DEFAULT 'recruiter';
+ALTER TABLE resumes_data
+  ADD COLUMN IF NOT EXISTS applicant_name VARCHAR(255) NULL;
+ALTER TABLE resumes_data
+  ADD COLUMN IF NOT EXISTS applicant_email VARCHAR(190) NULL;
 ALTER TABLE resumes_data
   ADD COLUMN IF NOT EXISTS is_accepted BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE resumes_data

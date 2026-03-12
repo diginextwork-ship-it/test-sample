@@ -7,6 +7,13 @@ const initialFormData = {
   name: "",
   phone: "",
   email: "",
+  hasPriorExperience: "",
+  experienceIndustry: "",
+  experienceIndustryOther: "",
+  currentSalary: "",
+  expectedSalary: "",
+  noticePeriod: "",
+  yearsOfExperience: "",
   latestEducationLevel: "",
   boardUniversity: "",
   institutionName: "",
@@ -42,6 +49,29 @@ export default function JobApplication({ setCurrentPage }) {
       const digitsOnly = value.replace(/\D/g, "").slice(0, 10);
       setPhoneError("");
       setFormData((prev) => ({ ...prev, [name]: digitsOnly }));
+      return;
+    }
+
+    if (name === "hasPriorExperience") {
+      setFormData((prev) => ({
+        ...prev,
+        hasPriorExperience: value,
+        experienceIndustry: value === "yes" ? prev.experienceIndustry : "",
+        experienceIndustryOther: value === "yes" ? prev.experienceIndustryOther : "",
+        currentSalary: value === "yes" ? prev.currentSalary : "",
+        expectedSalary: value === "yes" ? prev.expectedSalary : "",
+        noticePeriod: value === "yes" ? prev.noticePeriod : "",
+        yearsOfExperience: value === "yes" ? prev.yearsOfExperience : "",
+      }));
+      return;
+    }
+
+    if (name === "experienceIndustry") {
+      setFormData((prev) => ({
+        ...prev,
+        experienceIndustry: value,
+        experienceIndustryOther: value === "others" ? prev.experienceIndustryOther : "",
+      }));
       return;
     }
 
@@ -188,6 +218,32 @@ export default function JobApplication({ setCurrentPage }) {
       return;
     }
 
+    if (!["yes", "no"].includes(formData.hasPriorExperience)) {
+      setSubmitMessage("Please select whether you have prior experience.");
+      return;
+    }
+
+    if (formData.hasPriorExperience === "yes") {
+      if (
+        !formData.experienceIndustry ||
+        !formData.currentSalary ||
+        !formData.expectedSalary ||
+        !formData.noticePeriod ||
+        !formData.yearsOfExperience
+      ) {
+        setSubmitMessage("Please complete all prior experience fields.");
+        return;
+      }
+
+      if (
+        formData.experienceIndustry === "others" &&
+        !String(formData.experienceIndustryOther || "").trim()
+      ) {
+        setSubmitMessage("Please specify the industry when selecting others.");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setPhoneError("");
 
@@ -324,6 +380,120 @@ export default function JobApplication({ setCurrentPage }) {
                 required
               />
             </div>
+
+            <div className="application-field">
+              <label htmlFor="hasPriorExperience">Do you have any prior experience? *</label>
+              <select
+                id="hasPriorExperience"
+                name="hasPriorExperience"
+                value={formData.hasPriorExperience}
+                onChange={handleChange}
+                required
+              >
+                <option value="">Select</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            {formData.hasPriorExperience === "yes" ? (
+              <div className="application-experience-block">
+                <div className="application-field">
+                  <label htmlFor="experienceIndustry">Industry *</label>
+                  <select
+                    id="experienceIndustry"
+                    name="experienceIndustry"
+                    value={formData.experienceIndustry}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="">Select industry</option>
+                    <option value="it">IT</option>
+                    <option value="marketing">Marketing</option>
+                    <option value="sales">Sales</option>
+                    <option value="finance">Finance</option>
+                    <option value="others">Others</option>
+                  </select>
+                </div>
+
+                {formData.experienceIndustry === "others" ? (
+                  <div className="application-field">
+                    <label htmlFor="experienceIndustryOther">Please specify industry *</label>
+                    <input
+                      id="experienceIndustryOther"
+                      name="experienceIndustryOther"
+                      type="text"
+                      value={formData.experienceIndustryOther}
+                      onChange={handleChange}
+                      placeholder="Enter industry name"
+                      required
+                    />
+                  </div>
+                ) : null}
+
+                <div className="application-grid">
+                  <div className="application-field">
+                    <label htmlFor="currentSalary">Current salary *</label>
+                    <input
+                      id="currentSalary"
+                      name="currentSalary"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.currentSalary}
+                      onChange={handleChange}
+                      placeholder="Enter current salary"
+                      required
+                    />
+                  </div>
+
+                  <div className="application-field">
+                    <label htmlFor="expectedSalary">Expected salary *</label>
+                    <input
+                      id="expectedSalary"
+                      name="expectedSalary"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.expectedSalary}
+                      onChange={handleChange}
+                      placeholder="Enter expected salary"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="application-grid">
+                  <div className="application-field">
+                    <label htmlFor="noticePeriod">Notice period *</label>
+                    <input
+                      id="noticePeriod"
+                      name="noticePeriod"
+                      type="text"
+                      value={formData.noticePeriod}
+                      onChange={handleChange}
+                      placeholder="Immediate / 30 days / 60 days"
+                      required
+                    />
+                  </div>
+
+                  <div className="application-field">
+                    <label htmlFor="yearsOfExperience">Years of experience *</label>
+                    <input
+                      id="yearsOfExperience"
+                      name="yearsOfExperience"
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={formData.yearsOfExperience}
+                      onChange={handleChange}
+                      placeholder="Enter years of experience"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="application-field">
               <label htmlFor="latestEducationLevel">Add your latest education *</label>

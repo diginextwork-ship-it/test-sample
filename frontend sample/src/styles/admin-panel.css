@@ -353,6 +353,37 @@
   border: 1px solid rgba(220, 38, 38, 0.22);
 }
 
+.admin-shortlist-btn {
+  min-width: 110px;
+}
+
+.admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+}
+
+.admin-modal-card {
+  width: min(100%, 480px);
+  background: #fff;
+  border-radius: 1rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2);
+  padding: 1.5rem;
+}
+
+.admin-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
 .admin-attendance-toolbar {
   display: flex;
   align-items: flex-end;
@@ -467,6 +498,10 @@
     width: 100%;
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .admin-modal-actions {
+    flex-direction: column-reverse;
   }
 
   .admin-back-btn,

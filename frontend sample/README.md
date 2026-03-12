@@ -9,6 +9,7 @@ Create `.env` from `.env.example` and set:
 - `VITE_API_URL`: public URL of the backend API service (Railway)
 - `VITE_EMAILJS_SERVICE_ID`
 - `VITE_EMAILJS_TEMPLATE_ID`
+- `VITE_EMAILJS_SHORTLIST_TEMPLATE_ID`
 - `VITE_EMAILJS_PUBLIC_KEY`
 
 Notes:

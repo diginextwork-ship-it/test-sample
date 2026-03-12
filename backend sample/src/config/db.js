@@ -432,6 +432,12 @@ const ensureResumesDataTable = async () => {
     );
   }
 
+  if (!(await columnExists("resumes_data", "applicant_email"))) {
+    await pool.query(
+      "ALTER TABLE resumes_data ADD COLUMN applicant_email VARCHAR(190) NULL",
+    );
+  }
+
   if (!(await columnExists("resumes_data", "ats_score"))) {
     await pool.query(
       "ALTER TABLE resumes_data ADD COLUMN ats_score DECIMAL(5,2) NULL",
@@ -519,6 +525,48 @@ const ensureApplicationColumns = async () => {
   if (!(await columnExists("applications", "resume_filename"))) {
     await pool.query(
       "ALTER TABLE applications ADD COLUMN resume_filename VARCHAR(255) NULL",
+    );
+  }
+
+  if (!(await columnExists("applications", "has_prior_experience"))) {
+    await pool.query(
+      "ALTER TABLE applications ADD COLUMN has_prior_experience BOOLEAN NOT NULL DEFAULT FALSE",
+    );
+  }
+
+  if (!(await columnExists("applications", "experience_industry"))) {
+    await pool.query(
+      "ALTER TABLE applications ADD COLUMN experience_industry VARCHAR(100) NULL",
+    );
+  }
+
+  if (!(await columnExists("applications", "experience_industry_other"))) {
+    await pool.query(
+      "ALTER TABLE applications ADD COLUMN experience_industry_other VARCHAR(190) NULL",
+    );
+  }
+
+  if (!(await columnExists("applications", "current_salary"))) {
+    await pool.query(
+      "ALTER TABLE applications ADD COLUMN current_salary DECIMAL(12,2) NULL",
+    );
+  }
+
+  if (!(await columnExists("applications", "expected_salary"))) {
+    await pool.query(
+      "ALTER TABLE applications ADD COLUMN expected_salary DECIMAL(12,2) NULL",
+    );
+  }
+
+  if (!(await columnExists("applications", "notice_period"))) {
+    await pool.query(
+      "ALTER TABLE applications ADD COLUMN notice_period VARCHAR(100) NULL",
+    );
+  }
+
+  if (!(await columnExists("applications", "years_of_experience"))) {
+    await pool.query(
+      "ALTER TABLE applications ADD COLUMN years_of_experience DECIMAL(4,1) NULL",
     );
   }
 

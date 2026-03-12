@@ -602,13 +602,124 @@ router.get("/api/admin/candidate-resumes", async (req, res) => {
     }
 
     const hasApplicantNameColumn = await columnExists("resumes_data", "applicant_name");
+    const hasApplicantEmailColumn = await columnExists("resumes_data", "applicant_email");
     const hasAtsScoreColumn = await columnExists("resumes_data", "ats_score");
     const hasAtsMatchColumn = await columnExists("resumes_data", "ats_match_percentage");
     const hasJobDescriptionColumn = await columnExists("jobs", "job_description");
+    const hasApplicationsTable = await tableExists("applications");
+    const hasSelectionTable = await tableExists("job_resume_selection");
+    const hasPriorExperienceColumn =
+      hasApplicationsTable && await columnExists("applications", "has_prior_experience");
+    const hasExperienceIndustryColumn =
+      hasApplicationsTable && await columnExists("applications", "experience_industry");
+    const hasExperienceIndustryOtherColumn =
+      hasApplicationsTable && await columnExists("applications", "experience_industry_other");
+    const hasCurrentSalaryColumn =
+      hasApplicationsTable && await columnExists("applications", "current_salary");
+    const hasExpectedSalaryColumn =
+      hasApplicationsTable && await columnExists("applications", "expected_salary");
+    const hasNoticePeriodColumn =
+      hasApplicationsTable && await columnExists("applications", "notice_period");
+    const hasYearsOfExperienceColumn =
+      hasApplicationsTable && await columnExists("applications", "years_of_experience");
 
     const applicantNameSelect = hasApplicantNameColumn
       ? "rd.applicant_name AS applicantName,"
       : "NULL AS applicantName,";
+    const applicantEmailLookupSql = hasApplicationsTable
+      ? `(
+          SELECT a.email
+          FROM applications a
+          WHERE a.job_jid = rd.job_jid
+            AND (
+              a.resume_filename = rd.resume_filename
+              ${hasApplicantNameColumn ? "OR a.candidate_name = rd.applicant_name" : ""}
+            )
+          ORDER BY a.created_at DESC, a.id DESC
+          LIMIT 1
+        )`
+      : "NULL";
+    const applicationMatchSql = hasApplicationsTable
+      ? `a.job_jid = rd.job_jid
+          AND (
+            ${hasApplicantEmailColumn ? "a.email = rd.applicant_email OR" : ""}
+            a.resume_filename = rd.resume_filename
+            ${hasApplicantNameColumn ? "OR a.candidate_name = rd.applicant_name" : ""}
+          )`
+      : "1 = 0";
+    const priorExperienceSelect =
+      hasPriorExperienceColumn
+        ? `(
+            SELECT a.has_prior_experience
+            FROM applications a
+            WHERE ${applicationMatchSql}
+            ORDER BY a.created_at DESC, a.id DESC
+            LIMIT 1
+          ) AS hasPriorExperience,`
+        : "NULL AS hasPriorExperience,";
+    const experienceIndustrySelect =
+      hasExperienceIndustryColumn
+        ? `(
+            SELECT a.experience_industry
+            FROM applications a
+            WHERE ${applicationMatchSql}
+            ORDER BY a.created_at DESC, a.id DESC
+            LIMIT 1
+          ) AS experienceIndustry,`
+        : "NULL AS experienceIndustry,";
+    const experienceIndustryOtherSelect =
+      hasExperienceIndustryOtherColumn
+        ? `(
+            SELECT a.experience_industry_other
+            FROM applications a
+            WHERE ${applicationMatchSql}
+            ORDER BY a.created_at DESC, a.id DESC
+            LIMIT 1
+          ) AS experienceIndustryOther,`
+        : "NULL AS experienceIndustryOther,";
+    const currentSalarySelect =
+      hasCurrentSalaryColumn
+        ? `(
+            SELECT a.current_salary
+            FROM applications a
+            WHERE ${applicationMatchSql}
+            ORDER BY a.created_at DESC, a.id DESC
+            LIMIT 1
+          ) AS currentSalary,`
+        : "NULL AS currentSalary,";
+    const expectedSalarySelect =
+      hasExpectedSalaryColumn
+        ? `(
+            SELECT a.expected_salary
+            FROM applications a
+            WHERE ${applicationMatchSql}
+            ORDER BY a.created_at DESC, a.id DESC
+            LIMIT 1
+          ) AS expectedSalary,`
+        : "NULL AS expectedSalary,";
+    const noticePeriodSelect =
+      hasNoticePeriodColumn
+        ? `(
+            SELECT a.notice_period
+            FROM applications a
+            WHERE ${applicationMatchSql}
+            ORDER BY a.created_at DESC, a.id DESC
+            LIMIT 1
+          ) AS noticePeriod,`
+        : "NULL AS noticePeriod,";
+    const yearsOfExperienceSelect =
+      hasYearsOfExperienceColumn
+        ? `(
+            SELECT a.years_of_experience
+            FROM applications a
+            WHERE ${applicationMatchSql}
+            ORDER BY a.created_at DESC, a.id DESC
+            LIMIT 1
+          ) AS yearsOfExperience,`
+        : "NULL AS yearsOfExperience,";
+    const applicantEmailSelect = hasApplicantEmailColumn
+      ? `COALESCE(rd.applicant_email, ${applicantEmailLookupSql}) AS applicantEmail,`
+      : `${applicantEmailLookupSql} AS applicantEmail,`;
     const atsScoreSelect = hasAtsScoreColumn ? "rd.ats_score AS atsScore," : "NULL AS atsScore,";
     const atsMatchSelect = hasAtsMatchColumn
       ? "rd.ats_match_percentage AS atsMatchPercentage,"
@@ -616,12 +727,34 @@ router.get("/api/admin/candidate-resumes", async (req, res) => {
     const jobDescriptionSelect = hasJobDescriptionColumn
       ? "j.job_description AS jobDescription,"
       : "NULL AS jobDescription,";
+    const selectionSelect = hasSelectionTable
+      ? `jrs.selection_status AS selectionStatus,
+        jrs.selection_note AS selectionNote,
+        jrs.selected_by_admin AS selectedByAdmin,
+        jrs.selected_at AS selectedAt`
+      : `NULL AS selectionStatus,
+        NULL AS selectionNote,
+        NULL AS selectedByAdmin,
+        NULL AS selectedAt`;
+    const selectionJoin = hasSelectionTable
+      ? `LEFT JOIN job_resume_selection jrs
+        ON jrs.job_jid = rd.job_jid
+       AND jrs.res_id = rd.res_id`
+      : "";
 
     const [rows] = await pool.query(
       `SELECT
         rd.res_id AS resId,
         rd.job_jid AS jobJid,
         ${applicantNameSelect}
+        ${applicantEmailSelect}
+        ${priorExperienceSelect}
+        ${experienceIndustrySelect}
+        ${experienceIndustryOtherSelect}
+        ${currentSalarySelect}
+        ${expectedSalarySelect}
+        ${noticePeriodSelect}
+        ${yearsOfExperienceSelect}
         rd.resume_filename AS resumeFilename,
         rd.resume_type AS resumeType,
         ${atsScoreSelect}
@@ -630,9 +763,11 @@ router.get("/api/admin/candidate-resumes", async (req, res) => {
         j.role_name AS roleName,
         j.company_name AS companyName,
         ${jobDescriptionSelect}
-        j.skills AS skills
+        j.skills AS skills,
+        ${selectionSelect}
       FROM resumes_data rd
       LEFT JOIN jobs j ON j.jid = rd.job_jid
+      ${selectionJoin}
       WHERE COALESCE(rd.submitted_by_role, 'recruiter') = 'candidate'
       ORDER BY rd.uploaded_at DESC, rd.res_id ASC`
     );
@@ -643,6 +778,23 @@ router.get("/api/admin/candidate-resumes", async (req, res) => {
         resId: row.resId,
         jobJid: row.jobJid ? String(row.jobJid).trim() : null,
         applicantName: row.applicantName || null,
+        applicantEmail: row.applicantEmail || null,
+        hasPriorExperience: row.hasPriorExperience === null || row.hasPriorExperience === undefined
+          ? null
+          : Boolean(row.hasPriorExperience),
+        experience: {
+          industry: row.experienceIndustry || null,
+          industryOther: row.experienceIndustryOther || null,
+          currentSalary:
+            row.currentSalary === null || row.currentSalary === undefined ? null : Number(row.currentSalary),
+          expectedSalary:
+            row.expectedSalary === null || row.expectedSalary === undefined ? null : Number(row.expectedSalary),
+          noticePeriod: row.noticePeriod || null,
+          yearsOfExperience:
+            row.yearsOfExperience === null || row.yearsOfExperience === undefined
+              ? null
+              : Number(row.yearsOfExperience),
+        },
         resumeFilename: row.resumeFilename || null,
         resumeType: row.resumeType || null,
         atsScore: row.atsScore === null || row.atsScore === undefined ? null : Number(row.atsScore),
@@ -657,6 +809,14 @@ router.get("/api/admin/candidate-resumes", async (req, res) => {
           jobDescription: row.jobDescription || null,
           skills: row.skills || null,
         },
+        selection: row.selectionStatus
+          ? {
+              status: row.selectionStatus,
+              note: row.selectionNote || null,
+              selectedByAdmin: row.selectedByAdmin || null,
+              selectedAt: row.selectedAt || null,
+            }
+          : null,
       })),
     });
   } catch (error) {
