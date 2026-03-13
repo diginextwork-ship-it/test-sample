@@ -149,6 +149,28 @@ CREATE TABLE IF NOT EXISTS resumes_data (
     ON UPDATE CASCADE ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS extra_info (
+  res_id VARCHAR(30) NOT NULL,
+  resume_id VARCHAR(30) NULL,
+  job_jid INT NULL,
+  recruiter_rid VARCHAR(50) NULL,
+  rid VARCHAR(50) NULL,
+  candidate_name VARCHAR(255) NULL,
+  applicant_name VARCHAR(255) NULL,
+  candidate_email VARCHAR(190) NULL,
+  applicant_email VARCHAR(190) NULL,
+  email VARCHAR(190) NULL,
+  phone VARCHAR(20) NULL,
+  submitted_reason TEXT NULL,
+  verified_reason TEXT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (res_id),
+  UNIQUE KEY uniq_extra_info_resume_id (resume_id),
+  INDEX idx_extra_info_job_jid (job_jid),
+  INDEX idx_extra_info_recruiter_rid (recruiter_rid),
+  INDEX idx_extra_info_rid (rid)
+);
+
 ALTER TABLE resumes_data
   ADD COLUMN IF NOT EXISTS submitted_by_role VARCHAR(30) NULL DEFAULT 'recruiter';
 ALTER TABLE resumes_data

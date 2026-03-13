@@ -1,10 +1,16 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import AdminLayout from "./AdminLayout";
 import { API_BASE_URL, getAdminHeaders, readJsonResponse } from "./adminApi";
 import { BACKEND_CONNECTION_ERROR } from "../../config/api";
 import "../../styles/admin-panel.css";
 
 export default function AdminCreateRecruiter({ setCurrentPage }) {
+  const nameRef = useRef(null);
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
+  const roleRef = useRef(null);
+  const salaryRef = useRef(null);
+  const submitRef = useRef(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -14,6 +20,21 @@ export default function AdminCreateRecruiter({ setCurrentPage }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
+
+  const focusSequence = [nameRef, emailRef, passwordRef, roleRef, salaryRef, submitRef];
+
+  const handleAdvanceOnEnter = (event, currentRef) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+
+    const currentIndex = focusSequence.findIndex((ref) => ref === currentRef);
+    if (currentIndex === -1) return;
+
+    const nextTarget = focusSequence[currentIndex + 1]?.current;
+    if (nextTarget && typeof nextTarget.focus === "function") {
+      nextTarget.focus();
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -66,20 +87,24 @@ export default function AdminCreateRecruiter({ setCurrentPage }) {
         <form onSubmit={handleSubmit} className="admin-form">
           <label htmlFor="newRecruiterName">Recruiter Name</label>
           <input
+            ref={nameRef}
             id="newRecruiterName"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onKeyDown={(event) => handleAdvanceOnEnter(event, nameRef)}
             placeholder="Recruiter full name"
             required
           />
 
           <label htmlFor="newRecruiterEmail">Recruiter Email</label>
           <input
+            ref={emailRef}
             id="newRecruiterEmail"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(event) => handleAdvanceOnEnter(event, emailRef)}
             placeholder="recruiter@company.com"
             required
           />
@@ -87,10 +112,12 @@ export default function AdminCreateRecruiter({ setCurrentPage }) {
           <label htmlFor="newRecruiterPassword">Temporary Password</label>
           <div className="admin-password-input-wrap">
             <input
+              ref={passwordRef}
               id="newRecruiterPassword"
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(event) => handleAdvanceOnEnter(event, passwordRef)}
               placeholder="Set temporary password"
               required
             />
@@ -151,26 +178,34 @@ export default function AdminCreateRecruiter({ setCurrentPage }) {
 
           <label htmlFor="recruiterRole">Role</label>
           <select
+            ref={roleRef}
             id="recruiterRole"
             value={role}
             onChange={(e) => setRole(e.target.value)}
+            onKeyDown={(event) => handleAdvanceOnEnter(event, roleRef)}
             required
           >
             <option value="team leader">Team Leader</option>
-            <option value="job creator">Job Creator</option>
             <option value="recruiter">Recruiter</option>
           </select>
 
           <label htmlFor="newRecruiterSalary">Monthly Salary</label>
           <input
+            ref={salaryRef}
             id="newRecruiterSalary"
             type="text"
             value={monthlySalary}
             onChange={(e) => setMonthlySalary(e.target.value)}
+            onKeyDown={(event) => handleAdvanceOnEnter(event, salaryRef)}
             placeholder="e.g. 30000"
           />
 
-          <button type="submit" className="admin-create-btn" disabled={isSubmitting}>
+          <button
+            ref={submitRef}
+            type="submit"
+            className="admin-create-btn"
+            disabled={isSubmitting}
+          >
             {isSubmitting ? "Creating..." : "Create Recruiter"}
           </button>
 

@@ -23,6 +23,125 @@ const columnExists = async (tableName, columnName) => {
   return rows.length > 0;
 };
 
+const tableExists = async (tableName) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT 1
+       FROM information_schema.tables
+       WHERE table_schema = DATABASE() AND table_name = ?
+       LIMIT 1`,
+      [tableName]
+    );
+    if (rows.length > 0) return true;
+  } catch {}
+
+  try {
+    await pool.query(`SELECT 1 FROM \`${tableName}\` LIMIT 1`);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const getTableColumns = async (tableName, connection = pool) => {
+  const [rows] = await connection.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = ?`,
+    [tableName]
+  );
+  return new Set(rows.map((row) => String(row.column_name || "").trim()));
+};
+
+const fetchExtraInfoByResumeIds = async (resumeIds, connection = pool) => {
+  const normalizedResumeIds = dedupeStringList(resumeIds);
+  if (normalizedResumeIds.length === 0) return new Map();
+  if (!(await tableExists("extra_info"))) return new Map();
+
+  const columns = await getTableColumns("extra_info", connection);
+  const resumeIdColumn = columns.has("res_id") ? "res_id" : columns.has("resume_id") ? "resume_id" : "";
+  const hasSubmittedReason = columns.has("submitted_reason");
+  const hasVerifiedReason = columns.has("verified_reason");
+
+  if (!resumeIdColumn || (!hasSubmittedReason && !hasVerifiedReason)) return new Map();
+
+  const selectColumns = [`${resumeIdColumn} AS resumeId`];
+  if (hasSubmittedReason) selectColumns.push("submitted_reason AS submittedReason");
+  if (hasVerifiedReason) selectColumns.push("verified_reason AS verifiedReason");
+
+  const [rows] = await connection.query(
+    `SELECT ${selectColumns.join(", ")}
+     FROM extra_info
+     WHERE ${resumeIdColumn} IN (?)`,
+    [normalizedResumeIds]
+  );
+
+  return new Map(
+    rows.map((row) => [
+      String(row.resumeId || "").trim(),
+      {
+        submittedReason: row.submittedReason || null,
+        verifiedReason: row.verifiedReason || null,
+      },
+    ])
+  );
+};
+
+const upsertExtraInfoFields = async (connection, payload) => {
+  if (!(await tableExists("extra_info"))) return;
+
+  const columns = await getTableColumns("extra_info", connection);
+  const updates = [];
+  const insertColumns = [];
+  const insertValues = [];
+  const placeholders = [];
+
+  const addColumnValue = (columnName, value) => {
+    if (!columns.has(columnName) || value === undefined) return;
+    insertColumns.push(columnName);
+    insertValues.push(value);
+    placeholders.push("?");
+  };
+
+  addColumnValue("res_id", payload.resId);
+  addColumnValue("resume_id", payload.resId);
+  addColumnValue("job_jid", payload.jobJid);
+  addColumnValue("recruiter_rid", payload.recruiterRid);
+  addColumnValue("rid", payload.recruiterRid);
+  addColumnValue("candidate_name", payload.candidateName);
+  addColumnValue("applicant_name", payload.candidateName);
+  addColumnValue("candidate_email", payload.email);
+  addColumnValue("applicant_email", payload.email);
+  addColumnValue("email", payload.email);
+  addColumnValue("phone", payload.phone);
+
+  if (payload.submittedReason !== undefined && columns.has("submitted_reason")) {
+    insertColumns.push("submitted_reason");
+    insertValues.push(payload.submittedReason);
+    placeholders.push("?");
+    updates.push("submitted_reason = VALUES(submitted_reason)");
+  }
+
+  if (payload.verifiedReason !== undefined && columns.has("verified_reason")) {
+    insertColumns.push("verified_reason");
+    insertValues.push(payload.verifiedReason);
+    placeholders.push("?");
+    updates.push("verified_reason = VALUES(verified_reason)");
+  }
+
+  if (insertColumns.length === 0 || updates.length === 0) return;
+  if (columns.has("updated_at")) {
+    updates.push("updated_at = CURRENT_TIMESTAMP");
+  }
+
+  await connection.query(
+    `INSERT INTO extra_info (${insertColumns.map((column) => `\`${column}\``).join(", ")})
+     VALUES (${placeholders.join(", ")})
+     ON DUPLICATE KEY UPDATE ${updates.join(", ")}`,
+    insertValues
+  );
+};
+
 const getColumnMaxLength = async (tableName, columnName) => {
   const [rows] = await pool.query(
     `SELECT CHARACTER_MAXIMUM_LENGTH AS maxLength
@@ -842,9 +961,14 @@ router.get(
         [req.ownedJob.jid]
       );
 
+      const extraInfoByResumeId = await fetchExtraInfoByResumeIds(
+        rows.map((row) => row.resId)
+      );
+
       return res.status(200).json({
         jobId: req.ownedJob.jid,
         resumes: rows.map((row) => ({
+          ...(extraInfoByResumeId.get(String(row.resId || "").trim()) || {}),
           resId: row.resId,
           rid: row.rid,
           recruiterName: row.recruiterName || "Unknown",
@@ -895,9 +1019,14 @@ router.post(
         await connection.beginTransaction();
 
         const [resumeRows] = await connection.query(
-          `SELECT res_id AS resId, job_jid AS jobJid, rid AS recruiterRid
-           FROM resumes_data
-           WHERE res_id = ?
+          `SELECT
+            rd.res_id AS resId,
+            rd.job_jid AS jobJid,
+            rd.rid AS recruiterRid,
+            rd.applicant_name AS candidateName,
+            rd.applicant_email AS email
+           FROM resumes_data rd
+           WHERE rd.res_id = ?
            LIMIT 1`,
           [normalizedResId]
         );
@@ -915,6 +1044,7 @@ router.post(
         }
 
         const recruiterRid = toTrimmedString(resumeRows[0].recruiterRid);
+        const verifiedReason = normalizedStatus === "verified" ? normalizedNote || null : undefined;
         const [existingSelectionRows] = await connection.query(
           `SELECT selection_status AS selectionStatus
            FROM job_resume_selection
@@ -950,24 +1080,40 @@ router.post(
           );
         }
 
+        if (verifiedReason !== undefined) {
+          await upsertExtraInfoFields(connection, {
+            resId: normalizedResId,
+            jobJid: req.ownedJob.jid,
+            recruiterRid,
+            candidateName: toTrimmedString(resumeRows[0].candidateName) || undefined,
+            email: toTrimmedString(resumeRows[0].email) || undefined,
+            verifiedReason,
+          });
+        }
+
         if (recruiterRid && previousStatus !== normalizedStatus) {
+          const verifiedDelta =
+            (normalizedStatus === "verified" ? 1 : 0) - (previousStatus === "verified" ? 1 : 0);
           const selectDelta =
             (normalizedStatus === "selected" ? 1 : 0) - (previousStatus === "selected" ? 1 : 0);
           const rejectDelta =
             (normalizedStatus === "rejected" ? 1 : 0) - (previousStatus === "rejected" ? 1 : 0);
 
-          if (selectDelta !== 0 || rejectDelta !== 0) {
+          if (verifiedDelta !== 0 || selectDelta !== 0 || rejectDelta !== 0) {
             await connection.query(
-              `INSERT INTO status (recruiter_rid, submitted, \`select\`, reject, last_updated)
-               VALUES (?, 0, ?, ?, CURRENT_TIMESTAMP)
+              `INSERT INTO status (recruiter_rid, submitted, verified, \`select\`, reject, last_updated)
+               VALUES (?, 0, ?, ?, ?, CURRENT_TIMESTAMP)
                ON DUPLICATE KEY UPDATE
+                 verified = GREATEST(0, COALESCE(verified, 0) + ?),
                  \`select\` = GREATEST(0, COALESCE(\`select\`, 0) + ?),
                  reject = GREATEST(0, COALESCE(reject, 0) + ?),
                  last_updated = CURRENT_TIMESTAMP`,
               [
                 recruiterRid,
+                Math.max(0, verifiedDelta),
                 Math.max(0, selectDelta),
                 Math.max(0, rejectDelta),
+                verifiedDelta,
                 selectDelta,
                 rejectDelta,
               ]
@@ -983,6 +1129,7 @@ router.post(
             resId: normalizedResId,
             status: normalizedStatus,
             note: normalizedNote || null,
+            verifiedReason: verifiedReason === undefined ? null : verifiedReason,
             updatedBy: actorRid || "team-leader",
           },
         });

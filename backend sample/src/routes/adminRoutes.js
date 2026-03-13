@@ -1,7 +1,11 @@
 const express = require("express");
 const multer = require("multer");
 const pool = require("../config/db");
-const { createAuthToken, requireAuth, requireRoles } = require("../middleware/auth");
+const {
+  createAuthToken,
+  requireAuth,
+  requireRoles,
+} = require("../middleware/auth");
 
 const router = express.Router();
 const ADMIN_API_KEY = String(process.env.ADMIN_API_KEY || "admin123");
@@ -18,7 +22,9 @@ const revenueUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_REVENUE_UPLOAD_BYTES },
   fileFilter: (_req, file, callback) => {
-    const mimeType = String(file?.mimetype || "").trim().toLowerCase();
+    const mimeType = String(file?.mimetype || "")
+      .trim()
+      .toLowerCase();
     if (!ALLOWED_REVENUE_UPLOAD_MIME_TYPES.has(mimeType)) {
       return callback(
         new Error("Only JPG, PNG, WEBP images or PDF files are allowed."),
@@ -54,7 +60,7 @@ const tableExists = async (tableName) => {
        FROM information_schema.tables
        WHERE table_schema = DATABASE() AND table_name = ?
        LIMIT 1`,
-      [tableName]
+      [tableName],
     );
     if (rows.length > 0) return true;
   } catch {}
@@ -73,7 +79,7 @@ const columnExists = async (tableName, columnName) => {
      FROM information_schema.columns
      WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
      LIMIT 1`,
-    [tableName, columnName]
+    [tableName, columnName],
   );
   return rows.length > 0;
 };
@@ -87,7 +93,7 @@ const getColumnMetadata = async (tableName, columnName) => {
      FROM information_schema.columns
      WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
      LIMIT 1`,
-    [tableName, columnName]
+    [tableName, columnName],
   );
   return rows[0] || null;
 };
@@ -98,7 +104,7 @@ const constraintExists = async (tableName, constraintName) => {
      FROM information_schema.table_constraints
      WHERE table_schema = DATABASE() AND table_name = ? AND constraint_name = ?
      LIMIT 1`,
-    [tableName, constraintName]
+    [tableName, constraintName],
   );
   return rows.length > 0;
 };
@@ -115,24 +121,35 @@ const ensureMoneySumTable = async () => {
       entry_type VARCHAR(20) NOT NULL DEFAULT 'expense',
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )`
+    )`,
   );
 
   if (!(await columnExists("money_sum", "company_rev"))) {
-    await pool.query("ALTER TABLE money_sum ADD COLUMN company_rev DECIMAL(14,2) NOT NULL DEFAULT 0");
+    await pool.query(
+      "ALTER TABLE money_sum ADD COLUMN company_rev DECIMAL(14,2) NOT NULL DEFAULT 0",
+    );
   }
   if (!(await columnExists("money_sum", "expense"))) {
-    await pool.query("ALTER TABLE money_sum ADD COLUMN expense DECIMAL(14,2) NOT NULL DEFAULT 0");
+    await pool.query(
+      "ALTER TABLE money_sum ADD COLUMN expense DECIMAL(14,2) NOT NULL DEFAULT 0",
+    );
   }
   if (!(await columnExists("money_sum", "profit"))) {
-    await pool.query("ALTER TABLE money_sum ADD COLUMN profit DECIMAL(14,2) NOT NULL DEFAULT 0");
+    await pool.query(
+      "ALTER TABLE money_sum ADD COLUMN profit DECIMAL(14,2) NOT NULL DEFAULT 0",
+    );
   }
   if (!(await columnExists("money_sum", "reason"))) {
     await pool.query("ALTER TABLE money_sum ADD COLUMN reason TEXT NULL");
   }
   const reasonMetadata = await getColumnMetadata("money_sum", "reason");
   const reasonType = String(reasonMetadata?.dataType || "").toLowerCase();
-  if (reasonType && reasonType !== "text" && reasonType !== "mediumtext" && reasonType !== "longtext") {
+  if (
+    reasonType &&
+    reasonType !== "text" &&
+    reasonType !== "mediumtext" &&
+    reasonType !== "longtext"
+  ) {
     await pool.query("ALTER TABLE money_sum MODIFY COLUMN reason TEXT NULL");
   }
   if (!(await columnExists("money_sum", "photo"))) {
@@ -145,28 +162,28 @@ const ensureMoneySumTable = async () => {
   }
   if (!(await columnExists("money_sum", "entry_type"))) {
     await pool.query(
-      "ALTER TABLE money_sum ADD COLUMN entry_type VARCHAR(20) NOT NULL DEFAULT 'expense'"
+      "ALTER TABLE money_sum ADD COLUMN entry_type VARCHAR(20) NOT NULL DEFAULT 'expense'",
     );
   }
   if (!(await columnExists("money_sum", "created_at"))) {
     await pool.query(
-      "ALTER TABLE money_sum ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+      "ALTER TABLE money_sum ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
     );
   }
   if (!(await columnExists("money_sum", "updated_at"))) {
     await pool.query(
-      "ALTER TABLE money_sum ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+      "ALTER TABLE money_sum ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
     );
   }
 
   if (!(await columnExists("money_sum", "id"))) {
     await pool.query(
-      "ALTER TABLE money_sum ADD COLUMN id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST"
+      "ALTER TABLE money_sum ADD COLUMN id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST",
     );
   }
 
   await pool.query(
-    "ALTER TABLE money_sum MODIFY COLUMN id BIGINT NOT NULL AUTO_INCREMENT"
+    "ALTER TABLE money_sum MODIFY COLUMN id BIGINT NOT NULL AUTO_INCREMENT",
   );
 };
 
@@ -193,48 +210,59 @@ const ensureRecruiterAttendanceTable = async () => {
       CONSTRAINT fk_recruiter_attendance_money_sum
         FOREIGN KEY (money_sum_id) REFERENCES money_sum(id)
         ON UPDATE CASCADE ON DELETE SET NULL
-    )`
+    )`,
   );
 
   if (!(await columnExists("recruiter_attendance", "salary_amount"))) {
     await pool.query(
-      "ALTER TABLE recruiter_attendance ADD COLUMN salary_amount DECIMAL(12,2) NOT NULL DEFAULT 0"
+      "ALTER TABLE recruiter_attendance ADD COLUMN salary_amount DECIMAL(12,2) NOT NULL DEFAULT 0",
     );
   }
   if (!(await columnExists("recruiter_attendance", "money_sum_id"))) {
-    await pool.query("ALTER TABLE recruiter_attendance ADD COLUMN money_sum_id BIGINT NULL");
+    await pool.query(
+      "ALTER TABLE recruiter_attendance ADD COLUMN money_sum_id BIGINT NULL",
+    );
   }
   await pool.query(
-    "ALTER TABLE recruiter_attendance MODIFY COLUMN money_sum_id BIGINT NULL"
+    "ALTER TABLE recruiter_attendance MODIFY COLUMN money_sum_id BIGINT NULL",
   );
   if (!(await columnExists("recruiter_attendance", "marked_by"))) {
     await pool.query(
-      "ALTER TABLE recruiter_attendance ADD COLUMN marked_by VARCHAR(50) NOT NULL DEFAULT 'admin'"
+      "ALTER TABLE recruiter_attendance ADD COLUMN marked_by VARCHAR(50) NOT NULL DEFAULT 'admin'",
     );
   }
   if (!(await columnExists("recruiter_attendance", "marked_at"))) {
     await pool.query(
-      "ALTER TABLE recruiter_attendance ADD COLUMN marked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+      "ALTER TABLE recruiter_attendance ADD COLUMN marked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
     );
   }
   if (!(await columnExists("recruiter_attendance", "updated_at"))) {
     await pool.query(
-      "ALTER TABLE recruiter_attendance ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+      "ALTER TABLE recruiter_attendance ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
     );
   }
 
-  if (!(await constraintExists("recruiter_attendance", "fk_recruiter_attendance_money_sum"))) {
+  if (
+    !(await constraintExists(
+      "recruiter_attendance",
+      "fk_recruiter_attendance_money_sum",
+    ))
+  ) {
     await pool.query(
       `ALTER TABLE recruiter_attendance
        ADD CONSTRAINT fk_recruiter_attendance_money_sum
        FOREIGN KEY (money_sum_id) REFERENCES money_sum(id)
-       ON UPDATE CASCADE ON DELETE SET NULL`
+       ON UPDATE CASCADE ON DELETE SET NULL`,
     );
   }
 };
 
 const isAdminAuthorized = (req) => {
-  return String(req.auth?.role || "").trim().toLowerCase() === "admin";
+  return (
+    String(req.auth?.role || "")
+      .trim()
+      .toLowerCase() === "admin"
+  );
 };
 
 const ensureAdminAuthorized = (req, res) => {
@@ -256,10 +284,16 @@ const toMoneyNumber = (value) => {
 };
 
 const normalizeAttendanceStatus = (value) => {
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
   if (normalized === "present") return "present";
   if (normalized === "absent") return "absent";
-  if (normalized === "half_day" || normalized === "half-day" || normalized === "half day") {
+  if (
+    normalized === "half_day" ||
+    normalized === "half-day" ||
+    normalized === "half day"
+  ) {
     return "half_day";
   }
   return "";
@@ -274,7 +308,9 @@ const normalizeAttendanceDate = (value) => {
 };
 
 const normalizeStaffRole = (value) => {
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
   if (normalized === "team_leader") return "team leader";
   if (normalized === "job creator") return "team leader";
   if (normalized === "team leader") return "team leader";
@@ -284,11 +320,17 @@ const normalizeStaffRole = (value) => {
 const calculateAttendanceExpense = (status, dailySalary) => {
   const safeDailySalary = toMoneyNumber(dailySalary);
   if (status === "present") return safeDailySalary;
-  if (status === "half_day") return Math.round((safeDailySalary / 2) * 100) / 100;
+  if (status === "half_day")
+    return Math.round((safeDailySalary / 2) * 100) / 100;
   return 0;
 };
 
-const buildAttendanceReason = ({ recruiterRid, recruiterName, attendanceDate, status }) => {
+const buildAttendanceReason = ({
+  recruiterRid,
+  recruiterName,
+  attendanceDate,
+  status,
+}) => {
   const label = String(recruiterName || "").trim();
   const suffix = status === "half_day" ? "half day" : status;
   return label
@@ -297,18 +339,30 @@ const buildAttendanceReason = ({ recruiterRid, recruiterName, attendanceDate, st
 };
 
 const normalizeRevenueEntryType = (value) => {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (normalized === "intake" || normalized === "income" || normalized === "in") {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (
+    normalized === "intake" ||
+    normalized === "income" ||
+    normalized === "in"
+  ) {
     return "intake";
   }
-  if (normalized === "expense" || normalized === "outgoing" || normalized === "out") {
+  if (
+    normalized === "expense" ||
+    normalized === "outgoing" ||
+    normalized === "out"
+  ) {
     return "expense";
   }
   return "";
 };
 
 const normalizeRevenueReasonCategory = (value) => {
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
   if (normalized === "electricity bill") return "electricity bill";
   if (normalized === "salary") return "salary";
   if (normalized === "rent") return "rent";
@@ -352,7 +406,9 @@ const revenueReasonFromPayload = ({
 
 const toRevenueAttachmentDataUrl = (file) => {
   if (!file?.buffer || !file?.mimetype) return "";
-  const mimeType = String(file.mimetype || "").trim().toLowerCase();
+  const mimeType = String(file.mimetype || "")
+    .trim()
+    .toLowerCase();
   if (!ALLOWED_REVENUE_UPLOAD_MIME_TYPES.has(mimeType)) return "";
   const base64 = file.buffer.toString("base64");
   return `data:${mimeType};base64,${base64}`;
@@ -368,14 +424,22 @@ const recomputeMoneyProfit = async (connection) => {
   const [rows] = await connection.query(
     `SELECT id, company_rev AS companyRev, expense
      FROM money_sum
-     ORDER BY created_at ASC, id ASC`
+     ORDER BY created_at ASC, id ASC`,
   );
 
   let runningProfit = 0;
   for (const row of rows) {
     runningProfit =
-      Math.round((runningProfit + toMoneyNumber(row.companyRev) - toMoneyNumber(row.expense)) * 100) / 100;
-    await connection.query("UPDATE money_sum SET profit = ? WHERE id = ?", [runningProfit, row.id]);
+      Math.round(
+        (runningProfit +
+          toMoneyNumber(row.companyRev) -
+          toMoneyNumber(row.expense)) *
+          100,
+      ) / 100;
+    await connection.query("UPDATE money_sum SET profit = ? WHERE id = ?", [
+      runningProfit,
+      row.id,
+    ]);
   }
 };
 
@@ -404,14 +468,34 @@ router.get("/api/admin/dashboard", async (_req, res) => {
 
     if (await tableExists("resumes_data")) {
       const hasJobJidColumn = await columnExists("resumes_data", "job_jid");
-      const hasSubmittedByRoleColumn = await columnExists("resumes_data", "submitted_by_role");
-      const hasApplicantNameColumn = await columnExists("resumes_data", "applicant_name");
+      const hasSubmittedByRoleColumn = await columnExists(
+        "resumes_data",
+        "submitted_by_role",
+      );
+      const hasApplicantNameColumn = await columnExists(
+        "resumes_data",
+        "applicant_name",
+      );
       const hasAtsScoreColumn = await columnExists("resumes_data", "ats_score");
-      const hasAtsMatchColumn = await columnExists("resumes_data", "ats_match_percentage");
-      const hasAcceptedColumn = await columnExists("resumes_data", "is_accepted");
-      const hasAcceptedAtColumn = await columnExists("resumes_data", "accepted_at");
-      const hasAcceptedByAdminColumn = await columnExists("resumes_data", "accepted_by_admin");
-      const jobJidSelect = hasJobJidColumn ? "rd.job_jid AS jobJid," : "NULL AS jobJid,";
+      const hasAtsMatchColumn = await columnExists(
+        "resumes_data",
+        "ats_match_percentage",
+      );
+      const hasAcceptedColumn = await columnExists(
+        "resumes_data",
+        "is_accepted",
+      );
+      const hasAcceptedAtColumn = await columnExists(
+        "resumes_data",
+        "accepted_at",
+      );
+      const hasAcceptedByAdminColumn = await columnExists(
+        "resumes_data",
+        "accepted_by_admin",
+      );
+      const jobJidSelect = hasJobJidColumn
+        ? "rd.job_jid AS jobJid,"
+        : "NULL AS jobJid,";
       const acceptedSelect = hasAcceptedColumn
         ? "rd.is_accepted AS isAccepted,"
         : "0 AS isAccepted,";
@@ -422,15 +506,18 @@ router.get("/api/admin/dashboard", async (_req, res) => {
         ? "rd.accepted_by_admin AS acceptedByAdmin,"
         : "NULL AS acceptedByAdmin,";
 
-      const [countRows] = await pool.query("SELECT COUNT(*) AS totalResumeCount FROM resumes_data");
+      const [countRows] = await pool.query(
+        "SELECT COUNT(*) AS totalResumeCount FROM resumes_data",
+      );
       totalResumeCount = Number(countRows?.[0]?.totalResumeCount) || 0;
       if (hasSubmittedByRoleColumn) {
         const [candidateCountRows] = await pool.query(
           `SELECT COUNT(*) AS candidateResumeCount
            FROM resumes_data
-           WHERE COALESCE(submitted_by_role, 'recruiter') = 'candidate'`
+           WHERE COALESCE(submitted_by_role, 'recruiter') = 'candidate'`,
         );
-        candidateResumeCount = Number(candidateCountRows?.[0]?.candidateResumeCount) || 0;
+        candidateResumeCount =
+          Number(candidateCountRows?.[0]?.candidateResumeCount) || 0;
       }
 
       const [rows] = await pool.query(
@@ -451,12 +538,12 @@ router.get("/api/admin/dashboard", async (_req, res) => {
         FROM resumes_data rd
         INNER JOIN recruiter r ON r.rid = rd.rid
         LEFT JOIN jobs j ON j.jid = rd.job_jid
-        ORDER BY rd.uploaded_at DESC`
+        ORDER BY rd.uploaded_at DESC`,
       );
 
       recruiterResumeUploads = rows;
 
-      if (hasJobJidColumn && await tableExists("jobs")) {
+      if (hasJobJidColumn && (await tableExists("jobs"))) {
         const applicantNameSelect = hasApplicantNameColumn
           ? "ranked.applicant_name AS applicantName,"
           : "NULL AS applicantName,";
@@ -517,7 +604,7 @@ router.get("/api/admin/dashboard", async (_req, res) => {
                   AND (${rankingFilter})
               ) < 2
           ) ranked ON ranked.job_jid = j.jid
-          ORDER BY j.jid DESC, ranked.job_jid IS NULL, ranked.uploaded_at DESC`
+          ORDER BY j.jid DESC, ranked.job_jid IS NULL, ranked.uploaded_at DESC`,
         );
 
         const groupedByJob = new Map();
@@ -538,11 +625,13 @@ router.get("/api/admin/dashboard", async (_req, res) => {
               rid: row.rid,
               applicantName: row.applicantName || null,
               resumeFilename: row.resumeFilename || null,
-              atsScore: row.atsScore === null || row.atsScore === undefined
-                ? null
-                : Number(row.atsScore),
+              atsScore:
+                row.atsScore === null || row.atsScore === undefined
+                  ? null
+                  : Number(row.atsScore),
               atsMatchPercentage:
-                row.atsMatchPercentage === null || row.atsMatchPercentage === undefined
+                row.atsMatchPercentage === null ||
+                row.atsMatchPercentage === undefined
                   ? null
                   : Number(row.atsMatchPercentage),
               uploadedAt: row.uploadedAt || null,
@@ -552,8 +641,10 @@ router.get("/api/admin/dashboard", async (_req, res) => {
 
         topResumesByJob = Array.from(groupedByJob.values()).map((job) => {
           const sorted = [...job.topResumes].sort((a, b) => {
-            const matchA = a.atsMatchPercentage === null ? -1 : Number(a.atsMatchPercentage);
-            const matchB = b.atsMatchPercentage === null ? -1 : Number(b.atsMatchPercentage);
+            const matchA =
+              a.atsMatchPercentage === null ? -1 : Number(a.atsMatchPercentage);
+            const matchB =
+              b.atsMatchPercentage === null ? -1 : Number(b.atsMatchPercentage);
             if (matchB !== matchA) return matchB - matchA;
 
             const timeA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
@@ -593,7 +684,10 @@ router.get("/api/admin/candidate-resumes", async (req, res) => {
       });
     }
 
-    const hasSubmittedByRoleColumn = await columnExists("resumes_data", "submitted_by_role");
+    const hasSubmittedByRoleColumn = await columnExists(
+      "resumes_data",
+      "submitted_by_role",
+    );
     if (!hasSubmittedByRoleColumn) {
       return res.status(200).json({
         totalCount: 0,
@@ -601,27 +695,53 @@ router.get("/api/admin/candidate-resumes", async (req, res) => {
       });
     }
 
-    const hasApplicantNameColumn = await columnExists("resumes_data", "applicant_name");
-    const hasApplicantEmailColumn = await columnExists("resumes_data", "applicant_email");
+    const hasApplicantNameColumn = await columnExists(
+      "resumes_data",
+      "applicant_name",
+    );
+    const hasApplicantEmailColumn = await columnExists(
+      "resumes_data",
+      "applicant_email",
+    );
     const hasAtsScoreColumn = await columnExists("resumes_data", "ats_score");
-    const hasAtsMatchColumn = await columnExists("resumes_data", "ats_match_percentage");
-    const hasJobDescriptionColumn = await columnExists("jobs", "job_description");
+    const hasAtsMatchColumn = await columnExists(
+      "resumes_data",
+      "ats_match_percentage",
+    );
+    const hasJobDescriptionColumn = await columnExists(
+      "jobs",
+      "job_description",
+    );
     const hasApplicationsTable = await tableExists("applications");
     const hasSelectionTable = await tableExists("job_resume_selection");
+    const hasExtraInfoTable = await tableExists("extra_info");
+    const hasSubmittedReasonColumn =
+      hasExtraInfoTable &&
+      (await columnExists("extra_info", "submitted_reason"));
+    const hasVerifiedReasonColumn =
+      hasExtraInfoTable &&
+      (await columnExists("extra_info", "verified_reason"));
     const hasPriorExperienceColumn =
-      hasApplicationsTable && await columnExists("applications", "has_prior_experience");
+      hasApplicationsTable &&
+      (await columnExists("applications", "has_prior_experience"));
     const hasExperienceIndustryColumn =
-      hasApplicationsTable && await columnExists("applications", "experience_industry");
+      hasApplicationsTable &&
+      (await columnExists("applications", "experience_industry"));
     const hasExperienceIndustryOtherColumn =
-      hasApplicationsTable && await columnExists("applications", "experience_industry_other");
+      hasApplicationsTable &&
+      (await columnExists("applications", "experience_industry_other"));
     const hasCurrentSalaryColumn =
-      hasApplicationsTable && await columnExists("applications", "current_salary");
+      hasApplicationsTable &&
+      (await columnExists("applications", "current_salary"));
     const hasExpectedSalaryColumn =
-      hasApplicationsTable && await columnExists("applications", "expected_salary");
+      hasApplicationsTable &&
+      (await columnExists("applications", "expected_salary"));
     const hasNoticePeriodColumn =
-      hasApplicationsTable && await columnExists("applications", "notice_period");
+      hasApplicationsTable &&
+      (await columnExists("applications", "notice_period"));
     const hasYearsOfExperienceColumn =
-      hasApplicationsTable && await columnExists("applications", "years_of_experience");
+      hasApplicationsTable &&
+      (await columnExists("applications", "years_of_experience"));
 
     const applicantNameSelect = hasApplicantNameColumn
       ? "rd.applicant_name AS applicantName,"
@@ -647,80 +767,75 @@ router.get("/api/admin/candidate-resumes", async (req, res) => {
             ${hasApplicantNameColumn ? "OR a.candidate_name = rd.applicant_name" : ""}
           )`
       : "1 = 0";
-    const priorExperienceSelect =
-      hasPriorExperienceColumn
-        ? `(
+    const priorExperienceSelect = hasPriorExperienceColumn
+      ? `(
             SELECT a.has_prior_experience
             FROM applications a
             WHERE ${applicationMatchSql}
             ORDER BY a.created_at DESC, a.id DESC
             LIMIT 1
           ) AS hasPriorExperience,`
-        : "NULL AS hasPriorExperience,";
-    const experienceIndustrySelect =
-      hasExperienceIndustryColumn
-        ? `(
+      : "NULL AS hasPriorExperience,";
+    const experienceIndustrySelect = hasExperienceIndustryColumn
+      ? `(
             SELECT a.experience_industry
             FROM applications a
             WHERE ${applicationMatchSql}
             ORDER BY a.created_at DESC, a.id DESC
             LIMIT 1
           ) AS experienceIndustry,`
-        : "NULL AS experienceIndustry,";
-    const experienceIndustryOtherSelect =
-      hasExperienceIndustryOtherColumn
-        ? `(
+      : "NULL AS experienceIndustry,";
+    const experienceIndustryOtherSelect = hasExperienceIndustryOtherColumn
+      ? `(
             SELECT a.experience_industry_other
             FROM applications a
             WHERE ${applicationMatchSql}
             ORDER BY a.created_at DESC, a.id DESC
             LIMIT 1
           ) AS experienceIndustryOther,`
-        : "NULL AS experienceIndustryOther,";
-    const currentSalarySelect =
-      hasCurrentSalaryColumn
-        ? `(
+      : "NULL AS experienceIndustryOther,";
+    const currentSalarySelect = hasCurrentSalaryColumn
+      ? `(
             SELECT a.current_salary
             FROM applications a
             WHERE ${applicationMatchSql}
             ORDER BY a.created_at DESC, a.id DESC
             LIMIT 1
           ) AS currentSalary,`
-        : "NULL AS currentSalary,";
-    const expectedSalarySelect =
-      hasExpectedSalaryColumn
-        ? `(
+      : "NULL AS currentSalary,";
+    const expectedSalarySelect = hasExpectedSalaryColumn
+      ? `(
             SELECT a.expected_salary
             FROM applications a
             WHERE ${applicationMatchSql}
             ORDER BY a.created_at DESC, a.id DESC
             LIMIT 1
           ) AS expectedSalary,`
-        : "NULL AS expectedSalary,";
-    const noticePeriodSelect =
-      hasNoticePeriodColumn
-        ? `(
+      : "NULL AS expectedSalary,";
+    const noticePeriodSelect = hasNoticePeriodColumn
+      ? `(
             SELECT a.notice_period
             FROM applications a
             WHERE ${applicationMatchSql}
             ORDER BY a.created_at DESC, a.id DESC
             LIMIT 1
           ) AS noticePeriod,`
-        : "NULL AS noticePeriod,";
-    const yearsOfExperienceSelect =
-      hasYearsOfExperienceColumn
-        ? `(
+      : "NULL AS noticePeriod,";
+    const yearsOfExperienceSelect = hasYearsOfExperienceColumn
+      ? `(
             SELECT a.years_of_experience
             FROM applications a
             WHERE ${applicationMatchSql}
             ORDER BY a.created_at DESC, a.id DESC
             LIMIT 1
           ) AS yearsOfExperience,`
-        : "NULL AS yearsOfExperience,";
+      : "NULL AS yearsOfExperience,";
     const applicantEmailSelect = hasApplicantEmailColumn
       ? `COALESCE(rd.applicant_email, ${applicantEmailLookupSql}) AS applicantEmail,`
       : `${applicantEmailLookupSql} AS applicantEmail,`;
-    const atsScoreSelect = hasAtsScoreColumn ? "rd.ats_score AS atsScore," : "NULL AS atsScore,";
+    const atsScoreSelect = hasAtsScoreColumn
+      ? "rd.ats_score AS atsScore,"
+      : "NULL AS atsScore,";
     const atsMatchSelect = hasAtsMatchColumn
       ? "rd.ats_match_percentage AS atsMatchPercentage,"
       : "NULL AS atsMatchPercentage,";
@@ -740,6 +855,17 @@ router.get("/api/admin/candidate-resumes", async (req, res) => {
       ? `LEFT JOIN job_resume_selection jrs
         ON jrs.job_jid = rd.job_jid
        AND jrs.res_id = rd.res_id`
+      : "";
+    const submittedReasonSelect = hasSubmittedReasonColumn
+      ? "ei.submitted_reason AS submittedReason,"
+      : "NULL AS submittedReason,";
+    const verifiedReasonSelect = hasVerifiedReasonColumn
+      ? "ei.verified_reason AS verifiedReason,"
+      : "NULL AS verifiedReason,";
+    const extraInfoJoin = hasExtraInfoTable
+      ? `LEFT JOIN extra_info ei
+        ON ei.res_id = rd.res_id
+       OR (ei.resume_id = rd.res_id AND ei.res_id IS NULL)`
       : "";
 
     const [rows] = await pool.query(
@@ -764,12 +890,15 @@ router.get("/api/admin/candidate-resumes", async (req, res) => {
         j.company_name AS companyName,
         ${jobDescriptionSelect}
         j.skills AS skills,
+        ${submittedReasonSelect}
+        ${verifiedReasonSelect}
         ${selectionSelect}
       FROM resumes_data rd
       LEFT JOIN jobs j ON j.jid = rd.job_jid
+      ${extraInfoJoin}
       ${selectionJoin}
       WHERE COALESCE(rd.submitted_by_role, 'recruiter') = 'candidate'
-      ORDER BY rd.uploaded_at DESC, rd.res_id ASC`
+      ORDER BY rd.uploaded_at DESC, rd.res_id ASC`,
     );
 
     return res.status(200).json({
@@ -779,29 +908,42 @@ router.get("/api/admin/candidate-resumes", async (req, res) => {
         jobJid: row.jobJid ? String(row.jobJid).trim() : null,
         applicantName: row.applicantName || null,
         applicantEmail: row.applicantEmail || null,
-        hasPriorExperience: row.hasPriorExperience === null || row.hasPriorExperience === undefined
-          ? null
-          : Boolean(row.hasPriorExperience),
+        hasPriorExperience:
+          row.hasPriorExperience === null ||
+          row.hasPriorExperience === undefined
+            ? null
+            : Boolean(row.hasPriorExperience),
         experience: {
           industry: row.experienceIndustry || null,
           industryOther: row.experienceIndustryOther || null,
           currentSalary:
-            row.currentSalary === null || row.currentSalary === undefined ? null : Number(row.currentSalary),
+            row.currentSalary === null || row.currentSalary === undefined
+              ? null
+              : Number(row.currentSalary),
           expectedSalary:
-            row.expectedSalary === null || row.expectedSalary === undefined ? null : Number(row.expectedSalary),
+            row.expectedSalary === null || row.expectedSalary === undefined
+              ? null
+              : Number(row.expectedSalary),
           noticePeriod: row.noticePeriod || null,
           yearsOfExperience:
-            row.yearsOfExperience === null || row.yearsOfExperience === undefined
+            row.yearsOfExperience === null ||
+            row.yearsOfExperience === undefined
               ? null
               : Number(row.yearsOfExperience),
         },
         resumeFilename: row.resumeFilename || null,
         resumeType: row.resumeType || null,
-        atsScore: row.atsScore === null || row.atsScore === undefined ? null : Number(row.atsScore),
+        atsScore:
+          row.atsScore === null || row.atsScore === undefined
+            ? null
+            : Number(row.atsScore),
         atsMatchPercentage:
-          row.atsMatchPercentage === null || row.atsMatchPercentage === undefined
+          row.atsMatchPercentage === null ||
+          row.atsMatchPercentage === undefined
             ? null
             : Number(row.atsMatchPercentage),
+        submittedReason: row.submittedReason || null,
+        verifiedReason: row.verifiedReason || null,
         uploadedAt: row.uploadedAt || null,
         job: {
           roleName: row.roleName || null,
@@ -831,7 +973,9 @@ router.post("/api/admin/resumes/:resId/accept", async (req, res) => {
   if (!ensureAdminAuthorized(req, res)) return;
 
   const normalizedResId = String(req.params.resId || "").trim();
-  const selectedByAdmin = String(req.body?.selected_by_admin || "admin-panel").trim() || "admin-panel";
+  const selectedByAdmin =
+    String(req.body?.selected_by_admin || "admin-panel").trim() ||
+    "admin-panel";
   if (!normalizedResId) {
     return res.status(400).json({ message: "resId is required." });
   }
@@ -839,10 +983,15 @@ router.post("/api/admin/resumes/:resId/accept", async (req, res) => {
   const hasPointsColumn = await columnExists("recruiter", "points");
   const hasAcceptedColumn = await columnExists("resumes_data", "is_accepted");
   const hasAcceptedAtColumn = await columnExists("resumes_data", "accepted_at");
-  const hasAcceptedByAdminColumn = await columnExists("resumes_data", "accepted_by_admin");
+  const hasAcceptedByAdminColumn = await columnExists(
+    "resumes_data",
+    "accepted_by_admin",
+  );
 
   if (!hasAcceptedColumn) {
-    return res.status(500).json({ message: "Acceptance columns are not initialized." });
+    return res
+      .status(500)
+      .json({ message: "Acceptance columns are not initialized." });
   }
 
   const connection = await pool.getConnection();
@@ -851,15 +1000,15 @@ router.post("/api/admin/resumes/:resId/accept", async (req, res) => {
 
     const [resumeRows] = await connection.query(
       `SELECT
-        res_id AS resId,
-        rid,
-        job_jid AS jobJid,
-        is_accepted AS isAccepted
-      FROM resumes_data
-      WHERE res_id = ?
+        rd.res_id AS resId,
+        rd.rid,
+        rd.job_jid AS jobJid,
+        rd.is_accepted AS isAccepted
+      FROM resumes_data rd
+      WHERE rd.res_id = ?
       LIMIT 1
       FOR UPDATE`,
-      [normalizedResId]
+      [normalizedResId],
     );
 
     if (resumeRows.length === 0) {
@@ -882,26 +1031,30 @@ router.post("/api/admin/resumes/:resId/accept", async (req, res) => {
     if (resume.jobJid) {
       const [jobRows] = await connection.query(
         "SELECT COALESCE(points_per_joining, 0) AS pointsPerJoining FROM jobs WHERE jid = ? LIMIT 1",
-        [resume.jobJid]
+        [resume.jobJid],
       );
       pointsPerJoining = Number(jobRows?.[0]?.pointsPerJoining) || 0;
     }
 
     const updateAcceptedSegments = [];
     if (hasAcceptedColumn) updateAcceptedSegments.push("is_accepted = TRUE");
-    if (hasAcceptedAtColumn) updateAcceptedSegments.push("accepted_at = CURRENT_TIMESTAMP");
-    if (hasAcceptedByAdminColumn) updateAcceptedSegments.push("accepted_by_admin = ?");
-    const updateParams = hasAcceptedByAdminColumn ? [selectedByAdmin, normalizedResId] : [normalizedResId];
+    if (hasAcceptedAtColumn)
+      updateAcceptedSegments.push("accepted_at = CURRENT_TIMESTAMP");
+    if (hasAcceptedByAdminColumn)
+      updateAcceptedSegments.push("accepted_by_admin = ?");
+    const updateParams = hasAcceptedByAdminColumn
+      ? [selectedByAdmin, normalizedResId]
+      : [normalizedResId];
 
     await connection.query(
       `UPDATE resumes_data SET ${updateAcceptedSegments.join(", ")} WHERE res_id = ?`,
-      updateParams
+      updateParams,
     );
 
     if (hasPointsColumn && pointsPerJoining > 0) {
       await connection.query(
         "UPDATE recruiter SET points = COALESCE(points, 0) + ? WHERE rid = ?",
-        [pointsPerJoining, resume.rid]
+        [pointsPerJoining, resume.rid],
       );
     }
 
@@ -940,7 +1093,7 @@ router.get("/api/admin/job-alerts", async (req, res) => {
       LEFT JOIN resumes_data rd ON rd.job_jid = j.jid
       LEFT JOIN job_resume_selection jrs ON jrs.job_jid = j.jid AND jrs.res_id = rd.res_id
       GROUP BY j.jid, j.company_name, j.role_name, j.positions_open, j.created_at
-      ORDER BY j.created_at DESC, j.jid DESC`
+      ORDER BY j.created_at DESC, j.jid DESC`,
     );
 
     return res.status(200).json({
@@ -980,7 +1133,7 @@ router.get("/api/admin/jobs/:jid/resumes", async (req, res) => {
       FROM jobs
       WHERE jid = ?
       LIMIT 1`,
-      [safeJobId]
+      [safeJobId],
     );
 
     if (jobs.length === 0) {
@@ -988,12 +1141,35 @@ router.get("/api/admin/jobs/:jid/resumes", async (req, res) => {
     }
 
     const hasAtsScoreColumn = await columnExists("resumes_data", "ats_score");
-    const hasAtsMatchColumn = await columnExists("resumes_data", "ats_match_percentage");
+    const hasAtsMatchColumn = await columnExists(
+      "resumes_data",
+      "ats_match_percentage",
+    );
+    const hasExtraInfoTable = await tableExists("extra_info");
+    const hasSubmittedReasonColumn =
+      hasExtraInfoTable &&
+      (await columnExists("extra_info", "submitted_reason"));
+    const hasVerifiedReasonColumn =
+      hasExtraInfoTable &&
+      (await columnExists("extra_info", "verified_reason"));
 
-    const atsScoreSelect = hasAtsScoreColumn ? "rd.ats_score AS atsScore," : "NULL AS atsScore,";
+    const atsScoreSelect = hasAtsScoreColumn
+      ? "rd.ats_score AS atsScore,"
+      : "NULL AS atsScore,";
     const atsMatchSelect = hasAtsMatchColumn
       ? "rd.ats_match_percentage AS atsMatchPercentage,"
       : "NULL AS atsMatchPercentage,";
+    const submittedReasonSelect = hasSubmittedReasonColumn
+      ? "ei.submitted_reason AS submittedReason,"
+      : "NULL AS submittedReason,";
+    const verifiedReasonSelect = hasVerifiedReasonColumn
+      ? "ei.verified_reason AS verifiedReason,"
+      : "NULL AS verifiedReason,";
+    const extraInfoJoin = hasExtraInfoTable
+      ? `LEFT JOIN extra_info ei
+        ON ei.res_id = rd.res_id
+       OR (ei.resume_id = rd.res_id AND ei.res_id IS NULL)`
+      : "";
 
     const [rows] = await pool.query(
       `SELECT
@@ -1006,18 +1182,21 @@ router.get("/api/admin/jobs/:jid/resumes", async (req, res) => {
         ${atsScoreSelect}
         ${atsMatchSelect}
         rd.uploaded_at AS uploadedAt,
+        ${submittedReasonSelect}
+        ${verifiedReasonSelect}
         jrs.selection_status AS selectionStatus,
         jrs.selection_note AS selectionNote,
         jrs.selected_by_admin AS selectedByAdmin,
         jrs.selected_at AS selectedAt
       FROM resumes_data rd
       INNER JOIN recruiter r ON r.rid = rd.rid
+      ${extraInfoJoin}
       LEFT JOIN job_resume_selection jrs
         ON jrs.job_jid = rd.job_jid
        AND jrs.res_id = rd.res_id
       WHERE rd.job_jid = ?
       ORDER BY rd.uploaded_at DESC, rd.res_id ASC`,
-      [safeJobId]
+      [safeJobId],
     );
 
     return res.status(200).json({
@@ -1035,7 +1214,12 @@ router.get("/api/admin/jobs/:jid/resumes", async (req, res) => {
         resumeFilename: row.resumeFilename,
         resumeType: row.resumeType,
         atsScore: row.atsScore === null ? null : Number(row.atsScore),
-        atsMatchPercentage: row.atsMatchPercentage === null ? null : Number(row.atsMatchPercentage),
+        atsMatchPercentage:
+          row.atsMatchPercentage === null
+            ? null
+            : Number(row.atsMatchPercentage),
+        submittedReason: row.submittedReason || null,
+        verifiedReason: row.verifiedReason || null,
         uploadedAt: row.uploadedAt,
         selection: row.selectionStatus
           ? {
@@ -1063,16 +1247,24 @@ router.post("/api/admin/jobs/:jid/resume-selections", async (req, res) => {
     return res.status(400).json({ message: "jid is required." });
   }
 
-  const { resId, selection_status, selection_note, selected_by_admin } = req.body || {};
+  const { resId, selection_status, selection_note, selected_by_admin } =
+    req.body || {};
   const normalizedResId = String(resId || "").trim();
-  const normalizedStatus = String(selection_status || "").trim().toLowerCase();
+  const normalizedStatus = String(selection_status || "")
+    .trim()
+    .toLowerCase();
   const normalizedSelectedByAdmin = String(selected_by_admin || "").trim();
-  const normalizedSelectionNote = selection_note === undefined || selection_note === null
-    ? null
-    : String(selection_note).trim();
+  const normalizedSelectionNote =
+    selection_note === undefined || selection_note === null
+      ? null
+      : String(selection_note).trim();
   const allowedStatuses = new Set(["selected", "rejected", "on_hold"]);
 
-  if (!normalizedResId || !normalizedSelectedByAdmin || !allowedStatuses.has(normalizedStatus)) {
+  if (
+    !normalizedResId ||
+    !normalizedSelectedByAdmin ||
+    !allowedStatuses.has(normalizedStatus)
+  ) {
     return res.status(400).json({
       message: "resId, selection_status, and selected_by_admin are required.",
     });
@@ -1080,11 +1272,11 @@ router.post("/api/admin/jobs/:jid/resume-selections", async (req, res) => {
 
   try {
     const [resumeRows] = await pool.query(
-      `SELECT res_id AS resId, job_jid AS jobJid
-       FROM resumes_data
-       WHERE res_id = ?
+      `SELECT rd.res_id AS resId, rd.job_jid AS jobJid
+       FROM resumes_data rd
+       WHERE rd.res_id = ?
        LIMIT 1`,
-      [normalizedResId]
+      [normalizedResId],
     );
 
     if (resumeRows.length === 0) {
@@ -1112,7 +1304,7 @@ router.post("/api/admin/jobs/:jid/resume-selections", async (req, res) => {
         normalizedSelectedByAdmin,
         normalizedStatus,
         normalizedSelectionNote || null,
-      ]
+      ],
     );
 
     return res.status(200).json({
@@ -1151,7 +1343,7 @@ router.get("/api/admin/jobs/:jid/selection-summary", async (req, res) => {
       FROM jobs
       WHERE jid = ?
       LIMIT 1`,
-      [safeJobId]
+      [safeJobId],
     );
 
     if (jobRows.length === 0) {
@@ -1171,7 +1363,7 @@ router.get("/api/admin/jobs/:jid/selection-summary", async (req, res) => {
       WHERE jrs.job_jid = ?
         AND jrs.selection_status = 'selected'
       ORDER BY jrs.selected_at DESC, jrs.id DESC`,
-      [safeJobId]
+      [safeJobId],
     );
 
     const positionsOpen = Number(jobRows[0].positionsOpen) || 1;
@@ -1208,7 +1400,9 @@ router.get("/api/admin/attendance", async (req, res) => {
 
   const attendanceDate = normalizeAttendanceDate(req.query?.date);
   if (!attendanceDate) {
-    return res.status(400).json({ message: "date must be in YYYY-MM-DD format." });
+    return res
+      .status(400)
+      .json({ message: "date must be in YYYY-MM-DD format." });
   }
 
   try {
@@ -1250,7 +1444,7 @@ router.get("/api/admin/attendance", async (req, res) => {
         END,
         r.name ASC,
         r.rid ASC`,
-      [attendanceDate]
+      [attendanceDate],
     );
 
     const staff = rows.map((row) => {
@@ -1276,7 +1470,10 @@ router.get("/api/admin/attendance", async (req, res) => {
       (accumulator, member) => {
         accumulator.totalStaff += 1;
         accumulator.dailyExpense =
-          Math.round((accumulator.dailyExpense + toMoneyNumber(member.salaryAmount)) * 100) / 100;
+          Math.round(
+            (accumulator.dailyExpense + toMoneyNumber(member.salaryAmount)) *
+              100,
+          ) / 100;
         if (member.status === "present") accumulator.presentCount += 1;
         else if (member.status === "half_day") accumulator.halfDayCount += 1;
         else accumulator.absentCount += 1;
@@ -1288,7 +1485,7 @@ router.get("/api/admin/attendance", async (req, res) => {
         absentCount: 0,
         halfDayCount: 0,
         dailyExpense: 0,
-      }
+      },
     );
 
     return res.status(200).json({
@@ -1345,16 +1542,21 @@ router.put("/api/admin/attendance", async (req, res) => {
         AND LOWER(TRIM(COALESCE(role, 'recruiter'))) IN ('recruiter', 'team leader', 'team_leader', 'job creator')
       LIMIT 1
       FOR UPDATE`,
-      [recruiterRid]
+      [recruiterRid],
     );
 
     if (recruiterRows.length === 0) {
       await connection.rollback();
-      return res.status(404).json({ message: "Recruiter or team leader not found." });
+      return res
+        .status(404)
+        .json({ message: "Recruiter or team leader not found." });
     }
 
     const recruiter = recruiterRows[0];
-    const expenseAmount = calculateAttendanceExpense(status, recruiter.dailySalary);
+    const expenseAmount = calculateAttendanceExpense(
+      status,
+      recruiter.dailySalary,
+    );
 
     const [attendanceRows] = await connection.query(
       `SELECT id, money_sum_id AS moneySumId
@@ -1362,15 +1564,19 @@ router.put("/api/admin/attendance", async (req, res) => {
        WHERE recruiter_rid = ? AND attendance_date = ?
        LIMIT 1
        FOR UPDATE`,
-      [recruiterRid, attendanceDate]
+      [recruiterRid, attendanceDate],
     );
 
     const existingAttendance = attendanceRows[0] || null;
-    let moneySumId = existingAttendance?.moneySumId ? Number(existingAttendance.moneySumId) : null;
+    let moneySumId = existingAttendance?.moneySumId
+      ? Number(existingAttendance.moneySumId)
+      : null;
 
     if (status === "absent") {
       if (moneySumId) {
-        await connection.query("DELETE FROM money_sum WHERE id = ?", [moneySumId]);
+        await connection.query("DELETE FROM money_sum WHERE id = ?", [
+          moneySumId,
+        ]);
         moneySumId = null;
       }
     } else {
@@ -1385,7 +1591,7 @@ router.put("/api/admin/attendance", async (req, res) => {
       if (moneySumId) {
         const [moneyRows] = await connection.query(
           "SELECT id FROM money_sum WHERE id = ? LIMIT 1",
-          [moneySumId]
+          [moneySumId],
         );
         hasExistingMoneyRow = moneyRows.length > 0;
       }
@@ -1399,13 +1605,13 @@ router.put("/api/admin/attendance", async (req, res) => {
                photo = NULL,
                entry_type = 'expense'
            WHERE id = ?`,
-          [expenseAmount, reason, moneySumId]
+          [expenseAmount, reason, moneySumId],
         );
       } else {
         const [insertMoneySum] = await connection.query(
           `INSERT INTO money_sum (company_rev, expense, profit, reason, photo, entry_type)
            VALUES (0, ?, 0, ?, NULL, 'expense')`,
-          [expenseAmount, reason]
+          [expenseAmount, reason],
         );
         moneySumId = Number(insertMoneySum.insertId);
       }
@@ -1420,14 +1626,21 @@ router.put("/api/admin/attendance", async (req, res) => {
              marked_by = ?,
              marked_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
-        [status, expenseAmount, moneySumId, markedBy, existingAttendance.id]
+        [status, expenseAmount, moneySumId, markedBy, existingAttendance.id],
       );
     } else {
       await connection.query(
         `INSERT INTO recruiter_attendance
           (recruiter_rid, attendance_date, status, salary_amount, money_sum_id, marked_by)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [recruiterRid, attendanceDate, status, expenseAmount, moneySumId, markedBy]
+        [
+          recruiterRid,
+          attendanceDate,
+          status,
+          expenseAmount,
+          moneySumId,
+          markedBy,
+        ],
       );
     }
 
@@ -1486,14 +1699,14 @@ router.get("/api/admin/revenue", async (req, res) => {
         entry_type AS entryType,
         created_at AS createdAt
       FROM money_sum
-      ORDER BY created_at DESC, id DESC`
+      ORDER BY created_at DESC, id DESC`,
     );
 
     const [summaryRows] = await pool.query(
       `SELECT
         COALESCE(SUM(company_rev), 0) AS totalIntake,
         COALESCE(SUM(expense), 0) AS totalExpense
-      FROM money_sum`
+      FROM money_sum`,
     );
     const totalIntake = toMoneyNumber(summaryRows?.[0]?.totalIntake);
     const totalExpense = toMoneyNumber(summaryRows?.[0]?.totalExpense);
@@ -1507,7 +1720,9 @@ router.get("/api/admin/revenue", async (req, res) => {
         profit: toMoneyNumber(row.profit),
         reason: row.reason || "",
         photo: normalizePhotoValue(row.photo),
-        entryType: normalizeRevenueEntryType(row.entryType) || (toMoneyNumber(row.companyRev) > 0 ? "intake" : "expense"),
+        entryType:
+          normalizeRevenueEntryType(row.entryType) ||
+          (toMoneyNumber(row.companyRev) > 0 ? "intake" : "expense"),
         createdAt: row.createdAt,
       })),
       summary: {
@@ -1554,73 +1769,78 @@ router.get("/api/admin/recruiters/list", async (req, res) => {
   }
 });
 
-router.post("/api/admin/revenue/entries", parseRevenueUpload, async (req, res) => {
-  if (!ensureAdminAuthorized(req, res)) return;
+router.post(
+  "/api/admin/revenue/entries",
+  parseRevenueUpload,
+  async (req, res) => {
+    if (!ensureAdminAuthorized(req, res)) return;
 
-  await ensureMoneySumTable();
+    await ensureMoneySumTable();
 
-  const entryType = normalizeRevenueEntryType(req.body?.entryType);
-  const amount = toPositiveMoney(req.body?.amount);
-  const reasonCategory = req.body?.reasonCategory;
-  const otherReason = req.body?.otherReason;
-  const recruiterRid = req.body?.recruiterRid;
+    const entryType = normalizeRevenueEntryType(req.body?.entryType);
+    const amount = toPositiveMoney(req.body?.amount);
+    const reasonCategory = req.body?.reasonCategory;
+    const otherReason = req.body?.otherReason;
+    const recruiterRid = req.body?.recruiterRid;
 
-  if (!entryType || amount === null) {
-    return res.status(400).json({
-      message: "entryType ('intake' or 'expense') and positive amount are required.",
+    if (!entryType || amount === null) {
+      return res.status(400).json({
+        message:
+          "entryType ('intake' or 'expense') and positive amount are required.",
+      });
+    }
+
+    let recruiterName = "";
+    if (
+      normalizeRevenueReasonCategory(reasonCategory) === "salary" &&
+      String(recruiterRid || "").trim()
+    ) {
+      try {
+        const [recruiterRows] = await pool.query(
+          "SELECT name FROM recruiter WHERE rid = ? LIMIT 1",
+          [String(recruiterRid).trim()],
+        );
+        recruiterName = recruiterRows?.[0]?.name || "";
+      } catch {}
+    }
+
+    const reasonResult = revenueReasonFromPayload({
+      reasonCategory,
+      otherReason,
+      recruiterRid,
+      recruiterName,
     });
-  }
+    if (reasonResult.error) {
+      return res.status(400).json({
+        message: reasonResult.error,
+      });
+    }
 
-  let recruiterName = "";
-  if (
-    normalizeRevenueReasonCategory(reasonCategory) === "salary" &&
-    String(recruiterRid || "").trim()
-  ) {
+    const companyRev = entryType === "intake" ? amount : 0;
+    const expense = entryType === "expense" ? amount : 0;
+    const safeReason = reasonResult.reason || "";
+    const safePhoto = toRevenueAttachmentDataUrl(req.file) || null;
+
+    const connection = await pool.getConnection();
     try {
-      const [recruiterRows] = await pool.query(
-        "SELECT name FROM recruiter WHERE rid = ? LIMIT 1",
-        [String(recruiterRid).trim()],
+      await connection.beginTransaction();
+
+      const [profitRows] = await connection.query(
+        "SELECT COALESCE(profit, 0) AS lastProfit FROM money_sum ORDER BY created_at DESC, id DESC LIMIT 1",
       );
-      recruiterName = recruiterRows?.[0]?.name || "";
-    } catch {}
-  }
+      const lastProfit = toMoneyNumber(profitRows?.[0]?.lastProfit);
+      const nextProfit =
+        Math.round((lastProfit + companyRev - expense) * 100) / 100;
 
-  const reasonResult = revenueReasonFromPayload({
-    reasonCategory,
-    otherReason,
-    recruiterRid,
-    recruiterName,
-  });
-  if (reasonResult.error) {
-    return res.status(400).json({
-      message: reasonResult.error,
-    });
-  }
-
-  const companyRev = entryType === "intake" ? amount : 0;
-  const expense = entryType === "expense" ? amount : 0;
-  const safeReason = reasonResult.reason || "";
-  const safePhoto = toRevenueAttachmentDataUrl(req.file) || null;
-
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-
-    const [profitRows] = await connection.query(
-      "SELECT COALESCE(profit, 0) AS lastProfit FROM money_sum ORDER BY created_at DESC, id DESC LIMIT 1"
-    );
-    const lastProfit = toMoneyNumber(profitRows?.[0]?.lastProfit);
-    const nextProfit = Math.round((lastProfit + companyRev - expense) * 100) / 100;
-
-    const [insertResult] = await connection.query(
-      `INSERT INTO money_sum
+      const [insertResult] = await connection.query(
+        `INSERT INTO money_sum
         (company_rev, expense, profit, reason, photo, entry_type)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [companyRev, expense, nextProfit, safeReason, safePhoto, entryType]
-    );
+        [companyRev, expense, nextProfit, safeReason, safePhoto, entryType],
+      );
 
-    const [entryRows] = await connection.query(
-      `SELECT
+      const [entryRows] = await connection.query(
+        `SELECT
         id,
         company_rev AS companyRev,
         expense,
@@ -1632,35 +1852,37 @@ router.post("/api/admin/revenue/entries", parseRevenueUpload, async (req, res) =
       FROM money_sum
       WHERE id = ?
       LIMIT 1`,
-      [insertResult.insertId]
-    );
+        [insertResult.insertId],
+      );
 
-    await connection.commit();
-    return res.status(201).json({
-      message: "Revenue entry added successfully.",
-      entry: entryRows.length > 0
-        ? {
-            id: Number(entryRows[0].id),
-            companyRev: toMoneyNumber(entryRows[0].companyRev),
-            expense: toMoneyNumber(entryRows[0].expense),
-            profit: toMoneyNumber(entryRows[0].profit),
-            reason: entryRows[0].reason || "",
-            photo: normalizePhotoValue(entryRows[0].photo),
-            entryType: normalizeRevenueEntryType(entryRows[0].entryType),
-            createdAt: entryRows[0].createdAt,
-          }
-        : null,
-    });
-  } catch (error) {
-    await connection.rollback();
-    return res.status(500).json({
-      message: "Failed to add revenue entry.",
-      error: error.message,
-    });
-  } finally {
-    connection.release();
-  }
-});
+      await connection.commit();
+      return res.status(201).json({
+        message: "Revenue entry added successfully.",
+        entry:
+          entryRows.length > 0
+            ? {
+                id: Number(entryRows[0].id),
+                companyRev: toMoneyNumber(entryRows[0].companyRev),
+                expense: toMoneyNumber(entryRows[0].expense),
+                profit: toMoneyNumber(entryRows[0].profit),
+                reason: entryRows[0].reason || "",
+                photo: normalizePhotoValue(entryRows[0].photo),
+                entryType: normalizeRevenueEntryType(entryRows[0].entryType),
+                createdAt: entryRows[0].createdAt,
+              }
+            : null,
+      });
+    } catch (error) {
+      await connection.rollback();
+      return res.status(500).json({
+        message: "Failed to add revenue entry.",
+        error: error.message,
+      });
+    } finally {
+      connection.release();
+    }
+  },
+);
 
 router.delete("/api/admin/revenue/entries/:id", async (req, res) => {
   if (!ensureAdminAuthorized(req, res)) return;
@@ -1669,7 +1891,9 @@ router.delete("/api/admin/revenue/entries/:id", async (req, res) => {
 
   const entryId = Number(req.params.id);
   if (!Number.isInteger(entryId) || entryId <= 0) {
-    return res.status(400).json({ message: "Entry id must be a positive integer." });
+    return res
+      .status(400)
+      .json({ message: "Entry id must be a positive integer." });
   }
 
   const connection = await pool.getConnection();
@@ -1678,7 +1902,7 @@ router.delete("/api/admin/revenue/entries/:id", async (req, res) => {
 
     const [existing] = await connection.query(
       "SELECT id FROM money_sum WHERE id = ? LIMIT 1",
-      [entryId]
+      [entryId],
     );
     if (existing.length === 0) {
       await connection.rollback();
@@ -1689,7 +1913,9 @@ router.delete("/api/admin/revenue/entries/:id", async (req, res) => {
     await recomputeMoneyProfit(connection);
     await connection.commit();
 
-    return res.status(200).json({ message: "Revenue entry removed successfully." });
+    return res
+      .status(200)
+      .json({ message: "Revenue entry removed successfully." });
   } catch (error) {
     await connection.rollback();
     return res.status(500).json({
@@ -1698,6 +1924,90 @@ router.delete("/api/admin/revenue/entries/:id", async (req, res) => {
     });
   } finally {
     connection.release();
+  }
+});
+
+router.put("/api/admin/resumes/:resId/verified-reason", async (req, res) => {
+  if (!ensureAdminAuthorized(req, res)) return;
+
+  const resId = String(req.params.resId || "").trim();
+  const verifiedReason =
+    req.body?.verified_reason === undefined ||
+    req.body?.verified_reason === null
+      ? null
+      : String(req.body.verified_reason).trim();
+
+  if (!resId) {
+    return res.status(400).json({ message: "resId is required." });
+  }
+
+  try {
+    const hasExtraInfoTable = await tableExists("extra_info");
+    if (!hasExtraInfoTable) {
+      return res.status(500).json({
+        message: "extra_info table is required to update verified reason.",
+      });
+    }
+
+    const hasVerifiedReasonColumn = await columnExists(
+      "extra_info",
+      "verified_reason",
+    );
+    if (!hasVerifiedReasonColumn) {
+      return res.status(500).json({
+        message: "verified_reason column is required in extra_info table.",
+      });
+    }
+
+    // Check if the resume exists
+    const [resumeExists] = await pool.query(
+      "SELECT res_id FROM resumes_data WHERE res_id = ? LIMIT 1",
+      [resId],
+    );
+
+    if (resumeExists.length === 0) {
+      return res.status(404).json({ message: "Resume not found." });
+    }
+
+    const updates = ["verified_reason = ?"];
+    const hasUpdatedAtColumn = await columnExists("extra_info", "updated_at");
+    if (hasUpdatedAtColumn) {
+      updates.push("updated_at = CURRENT_TIMESTAMP");
+    }
+
+    const [result] = await pool.query(
+      `UPDATE extra_info SET ${updates.join(", ")} WHERE res_id = ?`,
+      [verifiedReason, resId],
+    );
+
+    // If no rows were updated, insert a new record
+    if (result.affectedRows === 0) {
+      const insertColumns = ["res_id", "resume_id", "verified_reason"];
+      const insertValues = [resId, resId, verifiedReason];
+      const placeholders = insertColumns.map(() => "?").join(", ");
+
+      if (hasUpdatedAtColumn) {
+        insertColumns.push("updated_at");
+        placeholders.push("?");
+        insertValues.push("CURRENT_TIMESTAMP");
+      }
+
+      await pool.query(
+        `INSERT INTO extra_info (${insertColumns.join(", ")}) VALUES (${placeholders})`,
+        insertValues,
+      );
+    }
+
+    return res.status(200).json({
+      message: "Team leader note updated successfully.",
+      resId,
+      verifiedReason,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to update team leader note.",
+      error: error.message,
+    });
   }
 });
 

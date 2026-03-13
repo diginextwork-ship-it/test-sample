@@ -165,11 +165,22 @@
 }
 
 .resume-modal-form input,
-.resume-modal-form select {
+.resume-modal-form select,
+.resume-modal-form textarea {
   width: 100%;
   padding: 10px;
   border: 1px solid #d4cfcf;
   border-radius: 8px;
+}
+
+.resume-modal-form textarea {
+  resize: vertical;
+  min-height: 88px;
+}
+
+.resume-modal-field {
+  display: grid;
+  gap: 6px;
 }
 
 .resume-modal-actions {

@@ -175,31 +175,6 @@
   cursor: pointer;
 }
 
-.metric-value.pending {
-  color: #999;
-  font-style: italic;
-}
-
-.coming-soon-badge {
-  background: #ffc107;
-  color: #000;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  margin-left: 6px;
-}
-
-.coming-soon {
-  display: inline-block;
-  background: #ffc107;
-  color: #000;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  margin-left: 8px;
-  font-weight: 500;
-}
-
 .table-summary {
   margin-top: 8px;
   display: flex;
@@ -286,6 +261,26 @@
   border-left-width: 4px;
 }
 
+.metric-card-button {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.metric-card-button:focus-visible {
+  outline: 2px solid #1f2937;
+  outline-offset: 2px;
+}
+
+.metric-card-button:hover {
+  background: #fcf9f9;
+}
+
+.metric-card-button:active {
+  transform: translateY(1px);
+}
+
 .metric-card.blue {
   border-left-color: #2196f3;
 }
@@ -294,12 +289,20 @@
   border-left-color: #4caf50;
 }
 
+.metric-card.red {
+  border-left-color: #ef4444;
+}
+
 .metric-card.purple {
   border-left-color: #9c27b0;
 }
 
 .metric-card.gold {
   border-left-color: #ffc107;
+}
+
+.metric-card.pink {
+  border-left-color: #ec4899;
 }
 
 .metric-card h4 {
@@ -417,4 +420,44 @@
   .dashboard-date-btn {
     flex: 1;
   }
+}
+
+
+.status-pill.status-verified {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.resume-action-btn.resume-action-verify.active {
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.table-cell-wrap {
+  min-width: 180px;
+  max-width: 280px;
+  white-space: normal;
+  vertical-align: top;
+}
+
+.resume-verify-box {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.resume-verify-box label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.resume-verify-box textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  resize: vertical;
 }

@@ -71,21 +71,14 @@ export default function RecruiterLogin() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isUpdatingCounter, setIsUpdatingCounter] = useState(false);
   const [isLoadingApplications, setIsLoadingApplications] = useState(false);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [recruiter, setRecruiter] = useState(null);
-  const [dashboard, setDashboard] = useState({
-    summary: { success: 0, points: 0, thisMonth: 0 },
-  });
   const [applications, setApplications] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
   const [activeAccessJobId, setActiveAccessJobId] = useState(null);
   const [availableRecruiters, setAvailableRecruiters] = useState([]);
-  const [dashboardMessage, setDashboardMessage] = useState("");
-  const [dashboardMessageType, setDashboardMessageType] = useState("");
-  const [candidateName, setCandidateName] = useState("");
   const [jobData, setJobData] = useState({
     city: "",
     state: "",
@@ -115,26 +108,9 @@ export default function RecruiterLogin() {
     Boolean(recruiter?.addjob);
   const canManageJobAccess = isTeamLeaderRole(normalizedRole);
   const canUploadResumes = normalizedRole === "recruiter";
-  const showRecruiterPerformance = normalizedRole === "recruiter";
   const getAuthHeaders = (extraHeaders = {}) => {
     const token = getAuthSession()?.token || "";
     return token ? { Authorization: `Bearer ${token}`, ...extraHeaders } : extraHeaders;
-  };
-
-  const fetchRecruiterDashboard = async (rid) => {
-    const response = await fetch(`${API_BASE_URL}/api/recruiters/${rid}/dashboard`, {
-      headers: getAuthHeaders(),
-    });
-    const data = await readJsonResponse(
-      response,
-      "Check VITE_API_BASE_URL and backend route setup."
-    );
-    if (!response.ok) {
-      throw new Error(data?.message || "Failed to fetch recruiter dashboard.");
-    }
-    setDashboard({
-      summary: data.summary || { success: 0, points: 0, thisMonth: 0 },
-    });
   };
 
   const fetchApplications = async (rid) => {
@@ -190,8 +166,6 @@ export default function RecruiterLogin() {
   const handleLoginSubmit = async (event) => {
     event.preventDefault();
     setIsSubmitting(true);
-    setDashboardMessage("");
-    setDashboardMessageType("");
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/recruiters/login`, {
@@ -257,7 +231,6 @@ export default function RecruiterLogin() {
     const loadDashboard = async () => {
       try {
         const tasks = [fetchApplications(recruiter.rid)];
-        if (showRecruiterPerformance) tasks.push(fetchRecruiterDashboard(recruiter.rid));
         if (canCreateJobs) {
           tasks.push(fetchAllJobs());
           if (canManageJobAccess) {
@@ -266,61 +239,13 @@ export default function RecruiterLogin() {
         }
         if (canUploadResumes) tasks.push(fetchRecruiterResumes(recruiter.rid));
         await Promise.all(tasks);
-      } catch (error) {
-        setDashboardMessageType("error");
-        setDashboardMessage(error.message || "Failed to load recruiter dashboard.");
+      } catch {
+        // Dashboard sections fetch their own data; keep this page resilient if one list fails.
       }
     };
 
     loadDashboard();
-  }, [recruiter?.rid, canCreateJobs, canManageJobAccess, canUploadResumes, showRecruiterPerformance]);
-
-  const handleCompleteCandidate = async () => {
-    if (!recruiter?.rid) return;
-    setIsUpdatingCounter(true);
-    setDashboardMessage("");
-    setDashboardMessageType("");
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/recruiters/${recruiter.rid}/candidate-click`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAuthHeaders(),
-          },
-          body: JSON.stringify({ candidateName }),
-        }
-      );
-      const data = await readJsonResponse(
-        response,
-        "Check VITE_API_BASE_URL and backend route setup."
-      );
-      if (!response.ok) {
-        throw new Error(data?.message || "Failed to update completion count.");
-      }
-
-      setDashboard((prev) => ({
-        ...prev,
-        summary: data.summary || prev.summary,
-      }));
-      setCandidateName("");
-      await fetchRecruiterDashboard(recruiter.rid);
-      setDashboardMessageType("success");
-      setDashboardMessage("Candidate completion updated.");
-    } catch (error) {
-      if (error instanceof TypeError) {
-        setDashboardMessageType("error");
-        setDashboardMessage(BACKEND_CONNECTION_ERROR);
-        return;
-      }
-      setDashboardMessageType("error");
-      setDashboardMessage(error.message || "Failed to update completion count.");
-    } finally {
-      setIsUpdatingCounter(false);
-    }
-  };
+  }, [recruiter?.rid, canCreateJobs, canManageJobAccess, canUploadResumes]);
 
   const handleJobInputChange = (event) => {
     const { name, value } = event.target;
@@ -416,13 +341,8 @@ export default function RecruiterLogin() {
     }
   };
 
-  const handleResumeSubmitted = async (result) => {
+  const handleResumeSubmitted = async () => {
     if (!recruiter?.rid) return;
-    const submittedCount = Number(result?.submittedCount);
-    if (Number.isFinite(submittedCount)) {
-      setDashboardMessageType("success");
-      setDashboardMessage(`Resume submitted successfully. Total submitted: ${submittedCount}`);
-    }
     await fetchRecruiterResumes(recruiter.rid);
   };
 
@@ -448,10 +368,7 @@ export default function RecruiterLogin() {
             </button>
 
             {canUploadResumes ? (
-              <RecruiterDashboard
-                recruiterId={recruiter.rid}
-                onViewJobs={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              />
+              <RecruiterDashboard recruiterId={recruiter.rid} />
             ) : null}
 
             {canManageJobAccess ? (
@@ -576,6 +493,8 @@ export default function RecruiterLogin() {
                           <th>Filename</th>
                           <th>Type</th>
                           <th>ATS Score</th>
+                          <th>Submitted Note</th>
+                          <th>Timing Info</th>
                           <th>Status</th>
                           <th>Uploaded At</th>
                           <th>File</th>
@@ -593,6 +512,8 @@ export default function RecruiterLogin() {
                                 ? "N/A"
                                 : `${item.atsScore}%`}
                             </td>
+                            <td className="table-cell-wrap">{item.submittedReason || "-"}</td>
+                            <td className="table-cell-wrap">{item.verifiedReason || "-"}</td>
                             <td>
                               {String(item.workflowStatus || "pending").replace(/_/g, " ")}
                             </td>
@@ -918,4 +839,5 @@ export default function RecruiterLogin() {
     </main>
   );
 }
+
 

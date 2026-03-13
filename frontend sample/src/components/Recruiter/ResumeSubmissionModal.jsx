@@ -10,6 +10,7 @@ const initialFormState = {
   board_university: "",
   institution_name: "",
   age: "",
+  submitted_reason: "",
   resume_file: null,
 };
 
@@ -24,6 +25,8 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
   const [parseMessageType, setParseMessageType] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [formData, setFormData] = useState(initialFormState);
+  const [resumeBase64, setResumeBase64] = useState("");
+  const [parsedPayload, setParsedPayload] = useState(null);
 
   useEffect(() => {
     if (!isOpen || !jobId || !recruiterId) return;
@@ -62,6 +65,8 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
       setParseMessage("");
       setParseMessageType("");
       setErrorMessage("");
+      setResumeBase64("");
+      setParsedPayload(null);
     }
   }, [isOpen]);
 
@@ -90,7 +95,7 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
       reader.readAsDataURL(file);
     });
 
-  const parseResumeAndAutofill = async (file) => {
+  const parseResumeAndAutofill = async (file, base64Override) => {
     if (!file || !jobId) return;
 
     setIsParsingResume(true);
@@ -98,15 +103,16 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
     setParseMessageType("");
 
     try {
-      const resumeBase64 = await fileToDataUrl(file);
+      const encodedResume = base64Override || (await fileToDataUrl(file));
+      const jid = String(jobId || "").trim();
       const response = await fetch(`${API_BASE_URL}/api/applications/parse-resume`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          jid: Number(jobId),
-          resumeBase64,
+          jid,
+          resumeBase64: encodedResume,
           resumeFilename: file.name,
           resumeMimeType: file.type,
         }),
@@ -130,6 +136,12 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
       }));
       setParseMessageType("success");
       setParseMessage("Resume parsed and form auto-filled successfully.");
+      setParsedPayload({
+        parsedData: data?.parsedData || null,
+        atsScore: data?.atsScore ?? null,
+        atsMatchPercentage: data?.atsMatchPercentage ?? null,
+        atsRawJson: data?.atsRawJson || null,
+      });
     } catch (error) {
       setParseMessageType("error");
       if (error instanceof TypeError) {
@@ -148,6 +160,8 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
     setParseMessage("");
     setParseMessageType("");
     setField("resume_file", file);
+    setResumeBase64("");
+    setParsedPayload(null);
 
     if (!file) return;
     const fileError = validateFile(file);
@@ -155,7 +169,14 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
       setErrorMessage(fileError);
       return;
     }
-    await parseResumeAndAutofill(file);
+
+    try {
+      const encodedResume = await fileToDataUrl(file);
+      setResumeBase64(encodedResume);
+      await parseResumeAndAutofill(file, encodedResume);
+    } catch (error) {
+      setErrorMessage(error.message || "Failed to read resume file.");
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -171,6 +192,13 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
       return;
     }
 
+    const resumeFilename = String(formData.resume_file?.name || "").trim();
+    const jid = String(jobId || "").trim();
+    if (!jid || !resumeBase64 || !resumeFilename) {
+      setErrorMessage("jid, resumeBase64, and resumeFilename are required.");
+      return;
+    }
+
     setSubmitting(true);
     setErrorMessage("");
 
@@ -178,6 +206,26 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
       const payload = new FormData();
       payload.append("job_jid", String(jobId));
       payload.append("recruiter_rid", String(recruiterId));
+      payload.append("jid", jid);
+      payload.append("resumeBase64", resumeBase64);
+      payload.append("resumeFilename", resumeFilename);
+      if (parsedPayload) {
+        if (parsedPayload.parsedData) {
+          payload.append("parsedData", JSON.stringify(parsedPayload.parsedData));
+        }
+        if (parsedPayload.atsScore !== null && parsedPayload.atsScore !== undefined) {
+          payload.append("atsScore", String(parsedPayload.atsScore));
+        }
+        if (
+          parsedPayload.atsMatchPercentage !== null &&
+          parsedPayload.atsMatchPercentage !== undefined
+        ) {
+          payload.append("atsMatchPercentage", String(parsedPayload.atsMatchPercentage));
+        }
+        if (parsedPayload.atsRawJson) {
+          payload.append("atsRawJson", JSON.stringify(parsedPayload.atsRawJson));
+        }
+      }
       Object.entries(formData).forEach(([key, value]) => {
         if (key === "resume_file") payload.append(key, value);
         else payload.append(key, String(value ?? "").trim());
@@ -271,6 +319,16 @@ export default function ResumeSubmissionModal({ recruiterId, jobId, isOpen, onCl
               onChange={handleResumeFileChange}
               required
             />
+            <div className="resume-modal-field">
+              <label htmlFor="submitted_reason">Any brief about candidate&apos;s availability?</label>
+              <textarea
+                id="submitted_reason"
+                placeholder="Add a short availability note"
+                value={formData.submitted_reason}
+                onChange={(event) => setField("submitted_reason", event.target.value)}
+                rows={3}
+              />
+            </div>
             {isParsingResume ? <p>Parsing resume and calculating ATS...</p> : null}
             {parseMessage ? (
               <p className={parseMessageType === "success" ? "job-message" : "job-message job-message-error"}>

@@ -481,6 +481,96 @@ const ensureResumesDataTable = async () => {
   }
 };
 
+const ensureExtraInfoTable = async () => {
+  const jobJidMetadata = await getColumnMetadata("jobs", "jid");
+  const jobJidColumnSql = buildColumnSql(jobJidMetadata, "VARCHAR(30)");
+
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS extra_info (
+      res_id VARCHAR(30) NOT NULL,
+      resume_id VARCHAR(30) NULL,
+      job_jid ${jobJidColumnSql} NULL,
+      recruiter_rid VARCHAR(50) NULL,
+      rid VARCHAR(50) NULL,
+      candidate_name VARCHAR(255) NULL,
+      applicant_name VARCHAR(255) NULL,
+      candidate_email VARCHAR(190) NULL,
+      applicant_email VARCHAR(190) NULL,
+      email VARCHAR(190) NULL,
+      phone VARCHAR(20) NULL,
+      submitted_reason TEXT NULL,
+      verified_reason TEXT NULL,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (res_id),
+      UNIQUE KEY uniq_extra_info_resume_id (resume_id),
+      INDEX idx_extra_info_job_jid (job_jid),
+      INDEX idx_extra_info_recruiter_rid (recruiter_rid),
+      INDEX idx_extra_info_rid (rid)
+    )`,
+  );
+
+  if (!(await columnExists("extra_info", "res_id"))) {
+    await pool.query("ALTER TABLE extra_info ADD COLUMN res_id VARCHAR(30) NULL");
+  }
+  if (!(await columnExists("extra_info", "resume_id"))) {
+    await pool.query("ALTER TABLE extra_info ADD COLUMN resume_id VARCHAR(30) NULL");
+  }
+  if (!(await columnExists("extra_info", "job_jid"))) {
+    await pool.query(`ALTER TABLE extra_info ADD COLUMN job_jid ${jobJidColumnSql} NULL`);
+  }
+  if (!(await columnExists("extra_info", "recruiter_rid"))) {
+    await pool.query("ALTER TABLE extra_info ADD COLUMN recruiter_rid VARCHAR(50) NULL");
+  }
+  if (!(await columnExists("extra_info", "rid"))) {
+    await pool.query("ALTER TABLE extra_info ADD COLUMN rid VARCHAR(50) NULL");
+  }
+  if (!(await columnExists("extra_info", "candidate_name"))) {
+    await pool.query("ALTER TABLE extra_info ADD COLUMN candidate_name VARCHAR(255) NULL");
+  }
+  if (!(await columnExists("extra_info", "applicant_name"))) {
+    await pool.query("ALTER TABLE extra_info ADD COLUMN applicant_name VARCHAR(255) NULL");
+  }
+  if (!(await columnExists("extra_info", "candidate_email"))) {
+    await pool.query("ALTER TABLE extra_info ADD COLUMN candidate_email VARCHAR(190) NULL");
+  }
+  if (!(await columnExists("extra_info", "applicant_email"))) {
+    await pool.query("ALTER TABLE extra_info ADD COLUMN applicant_email VARCHAR(190) NULL");
+  }
+  if (!(await columnExists("extra_info", "email"))) {
+    await pool.query("ALTER TABLE extra_info ADD COLUMN email VARCHAR(190) NULL");
+  }
+  if (!(await columnExists("extra_info", "phone"))) {
+    await pool.query("ALTER TABLE extra_info ADD COLUMN phone VARCHAR(20) NULL");
+  }
+  if (!(await columnExists("extra_info", "submitted_reason"))) {
+    await pool.query("ALTER TABLE extra_info ADD COLUMN submitted_reason TEXT NULL");
+  }
+  if (!(await columnExists("extra_info", "verified_reason"))) {
+    await pool.query("ALTER TABLE extra_info ADD COLUMN verified_reason TEXT NULL");
+  }
+  if (!(await columnExists("extra_info", "updated_at"))) {
+    await pool.query(
+      "ALTER TABLE extra_info ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+    );
+  }
+
+  if (!(await indexExists("extra_info", "uniq_extra_info_res_id"))) {
+    await pool.query("CREATE UNIQUE INDEX uniq_extra_info_res_id ON extra_info (res_id)");
+  }
+  if (!(await indexExists("extra_info", "uniq_extra_info_resume_id"))) {
+    await pool.query("CREATE UNIQUE INDEX uniq_extra_info_resume_id ON extra_info (resume_id)");
+  }
+  if (!(await indexExists("extra_info", "idx_extra_info_job_jid"))) {
+    await pool.query("CREATE INDEX idx_extra_info_job_jid ON extra_info (job_jid)");
+  }
+  if (!(await indexExists("extra_info", "idx_extra_info_recruiter_rid"))) {
+    await pool.query("CREATE INDEX idx_extra_info_recruiter_rid ON extra_info (recruiter_rid)");
+  }
+  if (!(await indexExists("extra_info", "idx_extra_info_rid"))) {
+    await pool.query("CREATE INDEX idx_extra_info_rid ON extra_info (rid)");
+  }
+};
+
 const ensureResumeIdSequenceTable = async () => {
   await pool.query(
     `CREATE TABLE IF NOT EXISTS resume_id_sequence (
@@ -907,6 +997,7 @@ const initDatabase = async () => {
   await ensureRecruiterTableColumns();
   await ensureJobsTableColumns();
   await ensureResumesDataTable();
+  await ensureExtraInfoTable();
   await ensureApplicationColumns();
   await ensureJobResumeSelectionTable();
   await ensureMoneySumTable();

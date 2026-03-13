@@ -48,6 +48,101 @@ const columnExists = async (tableName, columnName) => {
   return rows.length > 0;
 };
 
+const getTableColumns = async (tableName, connection = pool) => {
+  const [rows] = await connection.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = ?`,
+    [tableName]
+  );
+  return new Set(rows.map((row) => String(row.column_name || "").trim()));
+};
+
+const fetchExtraInfoByResumeIds = async (resumeIds, connection = pool) => {
+  const normalizedResumeIds = Array.from(
+    new Set((Array.isArray(resumeIds) ? resumeIds : []).map((value) => String(value || "").trim()).filter(Boolean))
+  );
+  if (normalizedResumeIds.length === 0) return new Map();
+  if (!(await tableExists("extra_info"))) return new Map();
+
+  const columns = await getTableColumns("extra_info", connection);
+  const resumeIdColumn = columns.has("res_id") ? "res_id" : columns.has("resume_id") ? "resume_id" : "";
+  const hasSubmittedReason = columns.has("submitted_reason");
+  const hasVerifiedReason = columns.has("verified_reason");
+
+  if (!resumeIdColumn || (!hasSubmittedReason && !hasVerifiedReason)) return new Map();
+
+  const selectColumns = [`${resumeIdColumn} AS resumeId`];
+  if (hasSubmittedReason) selectColumns.push("submitted_reason AS submittedReason");
+  if (hasVerifiedReason) selectColumns.push("verified_reason AS verifiedReason");
+
+  const [rows] = await connection.query(
+    `SELECT ${selectColumns.join(", ")}
+     FROM extra_info
+     WHERE ${resumeIdColumn} IN (?)`,
+    [normalizedResumeIds]
+  );
+
+  return new Map(
+    rows.map((row) => [
+      String(row.resumeId || "").trim(),
+      {
+        submittedReason: row.submittedReason || null,
+        verifiedReason: row.verifiedReason || null,
+      },
+    ])
+  );
+};
+
+const upsertSubmittedReason = async (
+  connection,
+  { resId, recruiterRid, jobJid, candidateName, email, phone, submittedReason }
+) => {
+  const reason = String(submittedReason || "").trim();
+  if (!reason) return;
+  if (!(await tableExists("extra_info"))) return;
+
+  const columns = await getTableColumns("extra_info", connection);
+  if (!columns.has("submitted_reason")) return;
+
+  const insertColumns = [];
+  const insertValues = [];
+  const placeholders = [];
+  const updateAssignments = ["submitted_reason = VALUES(submitted_reason)"];
+
+  const addColumnValue = (columnName, value) => {
+    if (!columns.has(columnName) || value === undefined) return;
+    insertColumns.push(columnName);
+    insertValues.push(value);
+    placeholders.push("?");
+  };
+
+  addColumnValue("res_id", resId);
+  addColumnValue("resume_id", resId);
+  addColumnValue("job_jid", jobJid);
+  addColumnValue("recruiter_rid", recruiterRid);
+  addColumnValue("rid", recruiterRid);
+  addColumnValue("candidate_name", candidateName);
+  addColumnValue("applicant_name", candidateName);
+  addColumnValue("candidate_email", email);
+  addColumnValue("applicant_email", email);
+  addColumnValue("email", email);
+  addColumnValue("phone", phone);
+  addColumnValue("submitted_reason", reason);
+
+  if (insertColumns.length === 0) return;
+  if (columns.has("updated_at")) {
+    updateAssignments.push("updated_at = CURRENT_TIMESTAMP");
+  }
+
+  await connection.query(
+    `INSERT INTO extra_info (${insertColumns.map((column) => `\`${column}\``).join(", ")})
+     VALUES (${placeholders.join(", ")})
+     ON DUPLICATE KEY UPDATE ${updateAssignments.join(", ")}`,
+    insertValues
+  );
+};
+
 const getRecruiterIdColumn = async (tableName) => {
   if (await columnExists(tableName, "recruiter_rid")) return "recruiter_rid";
   if (await columnExists(tableName, "rid")) return "rid";
@@ -102,6 +197,16 @@ const toMoneyOrNull = (value) => {
 const safeJsonOrNull = (value) => {
   if (value === undefined || value === null) return null;
   return JSON.stringify(value);
+};
+
+const parseJsonField = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(String(value));
+  } catch {
+    return null;
+  }
 };
 
 const normalizePhoneForStorage = (phone) => {
@@ -350,9 +455,9 @@ const getRecruiterSummary = async (rid) => {
 router.post("/api/recruiters", requireAuth, requireRoles("admin"), async (req, res) => {
   const { name, email, password, role, monthlySalary } = req.body || {};
 
-  if (!name || !email || !password) {
+  if (!name || !email || !password || !String(role || "").trim()) {
     return res.status(400).json({
-      message: "name, email, and password are required.",
+      message: "name, email, password, and role are required.",
     });
   }
 
@@ -404,18 +509,17 @@ router.post("/api/recruiters", requireAuth, requireRoles("admin"), async (req, r
     const nextNumber = lastRid ? Number.parseInt(lastRid.replace("hnr-", ""), 10) + 1 : 1;
     const rid = `hnr-${nextNumber}`;
 
-    const normalizedRole = String(role || "recruiter").trim().toLowerCase();
-    const allowedRoles = new Set(["job creator", "team leader", "team_leader", "recruiter"]);
+    const normalizedRole = String(role).trim().toLowerCase();
+    const allowedRoles = new Set(["team leader", "team_leader", "recruiter"]);
     if (!allowedRoles.has(normalizedRole)) {
       await connection.rollback();
       return res.status(400).json({
         message:
-          "role must be one of 'job creator', 'team leader', 'team_leader', or 'recruiter'.",
+          "role must be one of 'team leader', 'team_leader', or 'recruiter'.",
       });
     }
 
     const canAddJob =
-      normalizedRole === "job creator" ||
       normalizedRole === "team leader" ||
       normalizedRole === "team_leader";
     const hasRoleColumn = await columnExists("recruiter", "role");
@@ -427,10 +531,14 @@ router.post("/api/recruiters", requireAuth, requireRoles("admin"), async (req, r
     const insertColumns = ["rid", "name", "email", "password"];
     const insertValues = [rid, name.trim(), normalizedEmail, password];
 
-    if (hasRoleColumn) {
-      insertColumns.push("role");
-      insertValues.push(normalizedRole);
+    if (!hasRoleColumn) {
+      await connection.rollback();
+      return res.status(500).json({
+        message: "Recruiter role column is required to create a user.",
+      });
     }
+    insertColumns.push("role");
+    insertValues.push(normalizedRole);
     if (hasAddJobColumn) {
       insertColumns.push("addjob");
       insertValues.push(canAddJob);
@@ -820,11 +928,32 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
       });
     }
 
-    const parsed = await parseResumeWithAts({
-      resumeBuffer: resumeFile.buffer,
-      resumeFilename: originalName,
-      jobDescription: buildJobAtsContext(jobRows[0]),
-    });
+    const clientParsedData = parseJsonField(req.body?.parsedData);
+    const clientAtsScore = toNumberOrNull(req.body?.atsScore ?? req.body?.ats_score);
+    const clientAtsMatch = toNumberOrNull(
+      req.body?.atsMatchPercentage ?? req.body?.ats_match_percentage
+    );
+    const clientAtsRawJson = parseJsonField(req.body?.atsRawJson ?? req.body?.ats_raw_json);
+    const shouldSkipParsing =
+      clientParsedData ||
+      clientAtsRawJson ||
+      clientAtsScore !== null ||
+      clientAtsMatch !== null;
+
+    const parsed = shouldSkipParsing
+      ? {
+          ok: true,
+          parsedData: clientParsedData || null,
+          atsScore: clientAtsScore ?? null,
+          atsMatchPercentage: clientAtsMatch ?? null,
+          atsRawJson: clientAtsRawJson || null,
+        }
+      : await parseResumeWithAts({
+          resumeBuffer: resumeFile.buffer,
+          resumeFilename: originalName,
+          jobDescription: buildJobAtsContext(jobRows[0]),
+        });
+
     if (!parsed.ok) {
       return res.status(503).json({
         success: false,
@@ -844,6 +973,7 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
     const boardUniversity = String(req.body?.board_university || autofill.boardUniversity || "").trim();
     const institutionName = String(req.body?.institution_name || autofill.institutionName || "").trim();
     const age = toNumberOrNull(req.body?.age ?? autofill.age);
+    const submittedReason = String(req.body?.submitted_reason || "").trim();
 
     if (
       !candidateName ||
@@ -973,6 +1103,16 @@ router.post("/api/resumes/submit", requireAuth, requireRoles("recruiter"), async
            last_updated = CURRENT_TIMESTAMP`,
         [recruiterRid]
       );
+
+      await upsertSubmittedReason(connection, {
+        resId,
+        recruiterRid,
+        jobJid: safeJobId,
+        candidateName,
+        email,
+        phone,
+        submittedReason,
+      });
 
       const [statusRows] = await connection.query(
         `SELECT COALESCE(submitted, 0) AS submittedCount
@@ -1213,9 +1353,13 @@ router.get(
 
   try {
     const hasJobJidColumn = await columnExists("resumes_data", "job_jid");
+    const hasApplicantNameColumn = await columnExists("resumes_data", "applicant_name");
     const hasAtsScoreColumn = await columnExists("resumes_data", "ats_score");
     const hasAtsMatchColumn = await columnExists("resumes_data", "ats_match_percentage");
-    const jobJidSelection = hasJobJidColumn ? "job_jid AS jobJid," : "NULL AS jobJid,";
+    const jobJidSelection = hasJobJidColumn ? "rd.job_jid AS jobJid," : "NULL AS jobJid,";
+    const candidateNameSelection = hasApplicantNameColumn
+      ? "rd.applicant_name AS candidateName,"
+      : "NULL AS candidateName,";
     const atsScoreSelection = hasAtsScoreColumn ? "ats_score AS atsScore," : "NULL AS atsScore,";
     const atsMatchSelection = hasAtsMatchColumn
       ? "ats_match_percentage AS atsMatchPercentage,"
@@ -1223,13 +1367,14 @@ router.get(
 
     const [rows] = await pool.query(
       `SELECT
-        res_id AS resId,
+        rd.res_id AS resId,
         ${jobJidSelection}
-        resume_filename AS resumeFilename,
-        resume_type AS resumeType,
+        ${candidateNameSelection}
+        rd.resume_filename AS resumeFilename,
+        rd.resume_type AS resumeType,
         ${atsScoreSelection}
         ${atsMatchSelection}
-        uploaded_at AS uploadedAt,
+        rd.uploaded_at AS uploadedAt,
         COALESCE(jrs.selection_status, 'pending') AS workflowStatus,
         jrs.selected_at AS workflowUpdatedAt
       FROM resumes_data rd
@@ -1237,17 +1382,23 @@ router.get(
         ON jrs.job_jid = rd.job_jid
        AND jrs.res_id = rd.res_id
       WHERE rd.rid = ?
-      ORDER BY uploaded_at DESC`,
+      ORDER BY rd.uploaded_at DESC`,
       [rid]
+    );
+
+    const extraInfoByResumeId = await fetchExtraInfoByResumeIds(
+      rows.map((row) => row.resId)
     );
 
     return res.status(200).json({
       resumes: rows.map((row) => ({
         ...row,
+        candidateName: row.candidateName || null,
         atsScore: row.atsScore === null ? null : Number(row.atsScore),
         atsMatchPercentage: row.atsMatchPercentage === null ? null : Number(row.atsMatchPercentage),
         workflowStatus: row.workflowStatus || "pending",
         workflowUpdatedAt: row.workflowUpdatedAt || null,
+        ...(extraInfoByResumeId.get(String(row.resId || "").trim()) || {}),
       })),
     });
   } catch (error) {

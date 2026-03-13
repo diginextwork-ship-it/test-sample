@@ -22,6 +22,8 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
   const [jobsLoading, setJobsLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [verifyingResumeId, setVerifyingResumeId] = useState("");
+  const [verifyNote, setVerifyNote] = useState("");
 
   const selectedJob = useMemo(
     () => jobs.find((job) => String(job.jid) === String(selectedJobId)) || null,
@@ -72,6 +74,8 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
 
   useEffect(() => {
     setMessage("");
+    setVerifyingResumeId("");
+    setVerifyNote("");
     loadJobResumes(selectedJobId);
   }, [selectedJobId]);
 
@@ -95,6 +99,46 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
       onStatusUpdated?.();
     } catch (updateError) {
       setError(updateError.message || "Failed to update status.");
+    }
+  };
+
+  const openVerifyComposer = (resume) => {
+    setVerifyingResumeId(resume?.resId || "");
+    setVerifyNote(resume?.verifiedReason || "");
+    setMessage("");
+    setError("");
+  };
+
+  const handleVerifyResume = async (resume) => {
+    if (!selectedJobId || !resume?.resId) return;
+    setMessage("");
+    setError("");
+    try {
+      const normalizedNote = verifyNote.trim();
+      await updateJobResumeStatus(selectedJobId, {
+        resId: resume.resId,
+        status: "verified",
+        note: normalizedNote,
+      });
+      setResumes((prev) =>
+        prev.map((item) =>
+          item.resId === resume.resId
+            ? {
+                ...item,
+                status: "verified",
+                updatedAt: new Date().toISOString(),
+                updatedBy: "You",
+                verifiedReason: normalizedNote || null,
+              }
+            : item
+        )
+      );
+      setVerifyingResumeId("");
+      setVerifyNote("");
+      setMessage(`Verified ${resume.resId}.`);
+      onStatusUpdated?.();
+    } catch (updateError) {
+      setError(updateError.message || "Failed to verify resume.");
     }
   };
 
@@ -141,6 +185,8 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
                 <th>Recruiter</th>
                 <th>File</th>
                 <th>ATS Match</th>
+                <th>Recruiter Note</th>
+                <th>Timing Info</th>
                 <th>Status</th>
                 <th>Action</th>
                 <th>Updated</th>
@@ -158,6 +204,8 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
                       ? "N/A"
                       : `${resume.atsMatchPercentage}%`}
                   </td>
+                  <td className="table-cell-wrap">{resume.submittedReason || "-"}</td>
+                  <td className="table-cell-wrap">{resume.verifiedReason || "-"}</td>
                   <td>
                     <span className={`status-pill status-${resume.status || "pending"}`}>
                       {formatLabel(resume.status || "pending")}
@@ -165,6 +213,15 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
                   </td>
                   <td>
                     <div className="resume-status-actions">
+                      <button
+                        type="button"
+                        className={`resume-action-btn resume-action-verify ${
+                          resume.status === "verified" ? "active" : ""
+                        }`}
+                        onClick={() => openVerifyComposer(resume)}
+                      >
+                        Verify
+                      </button>
                       <button
                         type="button"
                         className={`resume-action-btn resume-action-select ${
@@ -184,6 +241,39 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
                         Reject
                       </button>
                     </div>
+                    {verifyingResumeId === resume.resId ? (
+                      <div className="resume-verify-box">
+                        <label htmlFor={`verify-note-${resume.resId}`}>
+                          Any information about timing?
+                        </label>
+                        <textarea
+                          id={`verify-note-${resume.resId}`}
+                          value={verifyNote}
+                          onChange={(event) => setVerifyNote(event.target.value)}
+                          rows={3}
+                          placeholder="Optional timing information"
+                        />
+                        <div className="resume-status-actions">
+                          <button
+                            type="button"
+                            className="resume-action-btn resume-action-verify active"
+                            onClick={() => handleVerifyResume(resume)}
+                          >
+                            Save Verify
+                          </button>
+                          <button
+                            type="button"
+                            className="resume-action-btn"
+                            onClick={() => {
+                              setVerifyingResumeId("");
+                              setVerifyNote("");
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </td>
                   <td>{formatDateTime(resume.updatedAt || resume.uploadedAt)}</td>
                 </tr>
