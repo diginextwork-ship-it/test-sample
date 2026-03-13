@@ -141,6 +141,11 @@ export default function RecruiterDashboard({ recruiterId, onViewJobs }) {
           value={toDisplay(data.stats?.verified)}
         />
         <PerformanceMetricCard
+          title="Walk in"
+          color="green"
+          value={toDisplay(data.stats?.walk_in)}
+        />
+        <PerformanceMetricCard
           title="Selected"
           color="purple"
           value={toDisplay(data.stats?.select)}

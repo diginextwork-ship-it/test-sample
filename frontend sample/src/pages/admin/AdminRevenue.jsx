@@ -30,7 +30,8 @@ export default function AdminRevenue({ setCurrentPage }) {
   const [recruiters, setRecruiters] = useState([]);
   const [summary, setSummary] = useState({ totalIntake: 0, totalExpense: 0, netProfit: 0 });
   const [searchFilters, setSearchFilters] = useState({
-    amount: "",
+    fromDate: "",
+    toDate: "",
     reason: "",
   });
   const [formData, setFormData] = useState({
@@ -98,15 +99,17 @@ export default function AdminRevenue({ setCurrentPage }) {
   }, []);
 
   const filteredEntries = entries.filter((item) => {
-    const amountQuery = searchFilters.amount.trim();
+    const fromDateQuery = searchFilters.fromDate.trim();
+    const toDateQuery = searchFilters.toDate.trim();
     const reasonQuery = searchFilters.reason.trim().toLowerCase();
-    const itemExpense = String(Number(item.expense || 0));
     const itemReason = String(item.reason || "").toLowerCase();
+    const itemDate = item.createdAt ? new Date(item.createdAt).toISOString().slice(0, 10) : "";
 
-    const matchesAmount = amountQuery ? itemExpense.includes(amountQuery) : true;
+    const matchesFromDate = fromDateQuery ? itemDate >= fromDateQuery : true;
+    const matchesToDate = toDateQuery ? itemDate <= toDateQuery : true;
     const matchesReason = reasonQuery ? itemReason.includes(reasonQuery) : true;
 
-    return matchesAmount && matchesReason;
+    return matchesFromDate && matchesToDate && matchesReason;
   });
 
   const handleInputChange = (event) => {
@@ -354,15 +357,23 @@ export default function AdminRevenue({ setCurrentPage }) {
           }}
         >
           <div>
-            <label htmlFor="expenseSearchAmount">Search by expense amount</label>
+            <label htmlFor="expenseSearchFromDate">From date</label>
             <input
-              id="expenseSearchAmount"
-              name="amount"
-              type="text"
-              inputMode="decimal"
-              value={searchFilters.amount}
+              id="expenseSearchFromDate"
+              name="fromDate"
+              type="date"
+              value={searchFilters.fromDate}
               onChange={handleSearchChange}
-              placeholder="e.g. 5000 or 5000.50"
+            />
+          </div>
+          <div>
+            <label htmlFor="expenseSearchToDate">To date</label>
+            <input
+              id="expenseSearchToDate"
+              name="toDate"
+              type="date"
+              value={searchFilters.toDate}
+              onChange={handleSearchChange}
             />
           </div>
           <div>
@@ -380,7 +391,7 @@ export default function AdminRevenue({ setCurrentPage }) {
         {entries.length === 0 ? (
           <p className="admin-chart-empty">No entries recorded yet.</p>
         ) : filteredEntries.length === 0 ? (
-          <p className="admin-chart-empty">No expense entries match the current search.</p>
+          <p className="admin-chart-empty">No revenue entries match the current search.</p>
         ) : (
           <div className="admin-table-wrap">
             <table className="admin-table admin-table-wide">
