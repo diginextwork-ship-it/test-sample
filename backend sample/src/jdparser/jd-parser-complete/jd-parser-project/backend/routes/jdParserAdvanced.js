@@ -1,9 +1,9 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const multer = require('multer');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const pdfParse = require('pdf-parse');
-const mammoth = require('mammoth');
+const multer = require("multer");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const pdfParse = require("pdf-parse");
+const mammoth = require("mammoth");
 
 // Configure multer for batch uploads
 const storage = multer.memoryStorage();
@@ -12,16 +12,20 @@ const batchUpload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain'
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "text/plain",
     ];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only PDF, DOCX, and TXT files are allowed.'));
+      cb(
+        new Error(
+          "Invalid file type. Only PDF, DOCX, and TXT files are allowed.",
+        ),
+      );
     }
-  }
+  },
 });
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -29,16 +33,19 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // Extract text from file
 async function extractTextFromFile(file) {
   try {
-    if (file.mimetype === 'application/pdf') {
+    if (file.mimetype === "application/pdf") {
       const data = await pdfParse(file.buffer);
       return data.text;
-    } else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    } else if (
+      file.mimetype ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
       const result = await mammoth.extractRawText({ buffer: file.buffer });
       return result.value;
-    } else if (file.mimetype === 'text/plain') {
-      return file.buffer.toString('utf-8');
+    } else if (file.mimetype === "text/plain") {
+      return file.buffer.toString("utf-8");
     }
-    throw new Error('Unsupported file type');
+    throw new Error("Unsupported file type");
   } catch (error) {
     throw new Error(`Failed to extract text: ${error.message}`);
   }
@@ -48,7 +55,7 @@ async function extractTextFromFile(file) {
 async function parseJDWithAI(jdText, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
       const prompt = `You are an expert HR data extraction system. Extract the following information from the job description below and return it as valid JSON only (no markdown, no explanation).
 
@@ -81,104 +88,114 @@ Return the extracted data as JSON:`;
       const result = await model.generateContent(prompt);
       const response = result.response;
       const text = response.text();
-      
+
       let cleanedText = text.trim();
-      if (cleanedText.startsWith('```json')) {
-        cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?$/g, '');
-      } else if (cleanedText.startsWith('```')) {
-        cleanedText = cleanedText.replace(/```\n?/g, '').replace(/```\n?$/g, '');
+      if (cleanedText.startsWith("```json")) {
+        cleanedText = cleanedText
+          .replace(/```json\n?/g, "")
+          .replace(/```\n?$/g, "");
+      } else if (cleanedText.startsWith("```")) {
+        cleanedText = cleanedText
+          .replace(/```\n?/g, "")
+          .replace(/```\n?$/g, "");
       }
-      
+
       const parsedData = JSON.parse(cleanedText);
-      
+
       return {
-        company_name: parsedData.company_name || 'Not Specified',
-        role_name: parsedData.role_name || 'Not Specified',
-        city: parsedData.city || '',
-        state: parsedData.state || '',
-        pincode: parsedData.pincode || '000000',
+        company_name: parsedData.company_name || "Not Specified",
+        role_name: parsedData.role_name || "Not Specified",
+        city: parsedData.city || "",
+        state: parsedData.state || "",
+        pincode: parsedData.pincode || "000000",
         positions_open: parseInt(parsedData.positions_open) || 1,
-        skills: parsedData.skills || '',
-        experience: parsedData.experience || 'Not Specified',
-        salary: parsedData.salary || 'Not Specified',
-        qualification: parsedData.qualification || '',
-        benefits: parsedData.benefits || '',
+        skills: parsedData.skills || "",
+        experience: parsedData.experience || "Not Specified",
+        salary: parsedData.salary || "Not Specified",
+        qualification: parsedData.qualification || "",
+        benefits: parsedData.benefits || "",
         job_description: parsedData.job_description || jdText,
         revenue: 0,
-        access_mode: 'open'
+        access_mode: "open",
       };
     } catch (error) {
       if (attempt === retries) {
-        throw new Error(`Failed to parse JD after ${retries} attempts: ${error.message}`);
+        throw new Error(
+          `Failed to parse JD after ${retries} attempts: ${error.message}`,
+        );
       }
       console.log(`Parse attempt ${attempt} failed, retrying...`);
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
     }
   }
 }
 
 // Route: Batch upload and parse multiple JD files
-router.post('/batch-upload', batchUpload.array('jdFiles', 10), async (req, res) => {
-  try {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ error: 'No files uploaded' });
-    }
+router.post(
+  "/batch-upload",
+  batchUpload.array("jdFiles", 10),
+  async (req, res) => {
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: "No files uploaded" });
+      }
 
-    const results = [];
-    const errors = [];
+      const results = [];
+      const errors = [];
 
-    for (let i = 0; i < req.files.length; i++) {
-      const file = req.files[i];
-      try {
-        const jdText = await extractTextFromFile(file);
-        
-        if (!jdText || jdText.trim().length === 0) {
+      for (let i = 0; i < req.files.length; i++) {
+        const file = req.files[i];
+        try {
+          const jdText = await extractTextFromFile(file);
+
+          if (!jdText || jdText.trim().length === 0) {
+            errors.push({
+              fileName: file.originalname,
+              error: "Could not extract text from file",
+            });
+            continue;
+          }
+
+          const parsedData = await parseJDWithAI(jdText);
+
+          results.push({
+            fileName: file.originalname,
+            data: parsedData,
+            status: "success",
+          });
+        } catch (error) {
           errors.push({
             fileName: file.originalname,
-            error: 'Could not extract text from file'
+            error: error.message,
           });
-          continue;
         }
-
-        const parsedData = await parseJDWithAI(jdText);
-        
-        results.push({
-          fileName: file.originalname,
-          data: parsedData,
-          status: 'success'
-        });
-      } catch (error) {
-        errors.push({
-          fileName: file.originalname,
-          error: error.message
-        });
       }
-    }
 
-    res.json({
-      success: true,
-      processed: results.length,
-      failed: errors.length,
-      results: results,
-      errors: errors
-    });
-  } catch (error) {
-    console.error('Batch Upload Error:', error);
-    res.status(500).json({ 
-      error: 'Failed to process batch upload', 
-      details: error.message 
-    });
-  }
-});
+      res.json({
+        success: true,
+        processed: results.length,
+        failed: errors.length,
+        results: results,
+        errors: errors,
+      });
+    } catch (error) {
+      console.error("Batch Upload Error:", error);
+      res.status(500).json({
+        error: "Failed to process batch upload",
+        details: error.message,
+      });
+    }
+  },
+);
 
 // Route: Save batch parsed JDs
-router.post('/batch-save', async (req, res) => {
+router.post("/batch-save", async (req, res) => {
   try {
-    const db = req.app.get('db');
+    const db = req.app.get("db");
     const { recruiter_rid, batchData } = req.body;
 
     if (!batchData || !Array.isArray(batchData) || batchData.length === 0) {
-      return res.status(400).json({ error: 'No batch data provided' });
+      return res.status(400).json({ error: "No batch data provided" });
     }
 
     const savedJobs = [];
@@ -186,7 +203,7 @@ router.post('/batch-save', async (req, res) => {
 
     for (let i = 0; i < batchData.length; i++) {
       const parsedData = batchData[i];
-      
+
       try {
         const jid = `JOB${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
 
@@ -214,20 +231,20 @@ router.post('/batch-save', async (req, res) => {
           parsedData.qualification,
           parsedData.benefits,
           parsedData.revenue || 0,
-          parsedData.access_mode || 'open'
+          parsedData.access_mode || "open",
         ];
 
         await db.execute(query, values);
-        
+
         savedJobs.push({
           jid: jid,
           role_name: parsedData.role_name,
-          status: 'saved'
+          status: "saved",
         });
       } catch (error) {
         failedJobs.push({
           role_name: parsedData.role_name,
-          error: error.message
+          error: error.message,
         });
       }
     }
@@ -237,31 +254,31 @@ router.post('/batch-save', async (req, res) => {
       saved: savedJobs.length,
       failed: failedJobs.length,
       savedJobs: savedJobs,
-      failedJobs: failedJobs
+      failedJobs: failedJobs,
     });
   } catch (error) {
-    console.error('Batch Save Error:', error);
-    res.status(500).json({ 
-      error: 'Failed to save batch jobs', 
-      details: error.message 
+    console.error("Batch Save Error:", error);
+    res.status(500).json({
+      error: "Failed to save batch jobs",
+      details: error.message,
     });
   }
 });
 
 // Route: Get parsing statistics
-router.get('/stats', async (req, res) => {
+router.get("/stats", async (req, res) => {
   try {
-    const db = req.app.get('db');
-    
-    const [totalJobs] = await db.execute('SELECT COUNT(*) as count FROM jobs');
+    const db = req.app.get("db");
+
+    const [totalJobs] = await db.execute("SELECT COUNT(*) as count FROM jobs");
     const [recentJobs] = await db.execute(
-      'SELECT COUNT(*) as count FROM jobs WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)'
+      "SELECT COUNT(*) as count FROM jobs WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
     );
     const [byAccessMode] = await db.execute(
-      'SELECT access_mode, COUNT(*) as count FROM jobs GROUP BY access_mode'
+      "SELECT access_mode, COUNT(*) as count FROM jobs GROUP BY access_mode",
     );
     const [topCompanies] = await db.execute(
-      'SELECT company_name, COUNT(*) as count FROM jobs GROUP BY company_name ORDER BY count DESC LIMIT 10'
+      "SELECT company_name, COUNT(*) as count FROM jobs GROUP BY company_name ORDER BY count DESC LIMIT 10",
     );
 
     res.json({
@@ -270,48 +287,56 @@ router.get('/stats', async (req, res) => {
         totalJobs: totalJobs[0].count,
         recentJobs: recentJobs[0].count,
         byAccessMode: byAccessMode,
-        topCompanies: topCompanies
-      }
+        topCompanies: topCompanies,
+      },
     });
   } catch (error) {
-    console.error('Stats Error:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch statistics', 
-      details: error.message 
+    console.error("Stats Error:", error);
+    res.status(500).json({
+      error: "Failed to fetch statistics",
+      details: error.message,
     });
   }
 });
 
 // Route: Search jobs
-router.get('/search', async (req, res) => {
+router.get("/search", async (req, res) => {
   try {
-    const db = req.app.get('db');
-    const { keyword, city, state, experience, limit = 20, offset = 0 } = req.query;
+    const db = req.app.get("db");
+    const {
+      keyword,
+      city,
+      state,
+      experience,
+      limit = 20,
+      offset = 0,
+    } = req.query;
 
-    let query = 'SELECT * FROM jobs WHERE 1=1';
+    let query = "SELECT * FROM jobs WHERE 1=1";
     const params = [];
 
     if (keyword) {
-      query += ' AND (role_name LIKE ? OR skills LIKE ? OR company_name LIKE ?)';
+      query +=
+        " AND (role_name LIKE ? OR skills LIKE ? OR company_name LIKE ?)";
       params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
 
     if (city) {
-      query += ' AND city = ?';
+      query += " AND city = ?";
       params.push(city);
     }
 
     if (state) {
-      query += ' AND state = ?';
+      query += " AND state = ?";
       params.push(state);
     }
 
     if (experience) {
-      query += ' AND experience LIKE ?';
+      query += " AND experience LIKE ?";
       params.push(`%${experience}%`);
     }
 
-    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
     params.push(parseInt(limit), parseInt(offset));
 
     const [jobs] = await db.execute(query, params);
@@ -319,54 +344,65 @@ router.get('/search', async (req, res) => {
     res.json({
       success: true,
       count: jobs.length,
-      jobs: jobs
+      jobs: jobs,
     });
   } catch (error) {
-    console.error('Search Error:', error);
-    res.status(500).json({ 
-      error: 'Failed to search jobs', 
-      details: error.message 
+    console.error("Search Error:", error);
+    res.status(500).json({
+      error: "Failed to search jobs",
+      details: error.message,
     });
   }
 });
 
 // Route: Get job by JID
-router.get('/:jid', async (req, res) => {
+router.get("/:jid", async (req, res) => {
   try {
-    const db = req.app.get('db');
+    const db = req.app.get("db");
     const { jid } = req.params;
 
-    const [jobs] = await db.execute('SELECT * FROM jobs WHERE jid = ?', [jid]);
+    const [jobs] = await db.execute("SELECT * FROM jobs WHERE jid = ?", [jid]);
 
     if (jobs.length === 0) {
-      return res.status(404).json({ error: 'Job not found' });
+      return res.status(404).json({ error: "Job not found" });
     }
 
     res.json({
       success: true,
-      job: jobs[0]
+      job: jobs[0],
     });
   } catch (error) {
-    console.error('Get Job Error:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch job', 
-      details: error.message 
+    console.error("Get Job Error:", error);
+    res.status(500).json({
+      error: "Failed to fetch job",
+      details: error.message,
     });
   }
 });
 
 // Route: Update job
-router.put('/:jid', async (req, res) => {
+router.put("/:jid", async (req, res) => {
   try {
-    const db = req.app.get('db');
+    const db = req.app.get("db");
     const { jid } = req.params;
     const updateData = req.body;
 
     // Build dynamic update query
     const allowedFields = [
-      'city', 'state', 'pincode', 'company_name', 'role_name', 
-      'positions_open', 'skills', 'job_description', 'experience', 
-      'salary', 'qualification', 'benefits', 'access_mode', 'revenue'
+      "city",
+      "state",
+      "pincode",
+      "company_name",
+      "role_name",
+      "positions_open",
+      "skills",
+      "job_description",
+      "experience",
+      "salary",
+      "qualification",
+      "benefits",
+      "access_mode",
+      "revenue",
     ];
 
     const updates = [];
@@ -380,53 +416,53 @@ router.put('/:jid', async (req, res) => {
     }
 
     if (updates.length === 0) {
-      return res.status(400).json({ error: 'No valid fields to update' });
+      return res.status(400).json({ error: "No valid fields to update" });
     }
 
     values.push(jid);
-    const query = `UPDATE jobs SET ${updates.join(', ')} WHERE jid = ?`;
+    const query = `UPDATE jobs SET ${updates.join(", ")} WHERE jid = ?`;
 
     const [result] = await db.execute(query, values);
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Job not found' });
+      return res.status(404).json({ error: "Job not found" });
     }
 
     res.json({
       success: true,
-      message: 'Job updated successfully',
-      jid: jid
+      message: "Job updated successfully",
+      jid: jid,
     });
   } catch (error) {
-    console.error('Update Job Error:', error);
-    res.status(500).json({ 
-      error: 'Failed to update job', 
-      details: error.message 
+    console.error("Update Job Error:", error);
+    res.status(500).json({
+      error: "Failed to update job",
+      details: error.message,
     });
   }
 });
 
 // Route: Delete job
-router.delete('/:jid', async (req, res) => {
+router.delete("/:jid", async (req, res) => {
   try {
-    const db = req.app.get('db');
+    const db = req.app.get("db");
     const { jid } = req.params;
 
-    const [result] = await db.execute('DELETE FROM jobs WHERE jid = ?', [jid]);
+    const [result] = await db.execute("DELETE FROM jobs WHERE jid = ?", [jid]);
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Job not found' });
+      return res.status(404).json({ error: "Job not found" });
     }
 
     res.json({
       success: true,
-      message: 'Job deleted successfully'
+      message: "Job deleted successfully",
     });
   } catch (error) {
-    console.error('Delete Job Error:', error);
-    res.status(500).json({ 
-      error: 'Failed to delete job', 
-      details: error.message 
+    console.error("Delete Job Error:", error);
+    res.status(500).json({
+      error: "Failed to delete job",
+      details: error.message,
     });
   }
 });

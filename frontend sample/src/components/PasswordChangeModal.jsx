@@ -8,6 +8,7 @@ export default function PasswordChangeModal({
   onClose,
   recruiterName,
   recruiterId,
+  onPasswordChanged,
 }) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -80,6 +81,11 @@ export default function PasswordChangeModal({
       // Clear form after success
       setNewPassword("");
       setConfirmPassword("");
+
+      // Notify parent component that password was changed
+      if (onPasswordChanged) {
+        onPasswordChanged();
+      }
 
       // Close modal after 2 seconds
       setTimeout(() => {

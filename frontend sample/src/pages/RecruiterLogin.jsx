@@ -248,6 +248,14 @@ export default function RecruiterLogin() {
     }
   };
 
+  const handlePasswordChanged = () => {
+    // Update the recruiter state to mark password as changed
+    setRecruiter((prevRecruiter) => ({
+      ...prevRecruiter,
+      passwordChanged: true,
+    }));
+  };
+
   useEffect(() => {
     if (recruiter) return;
     const session = getAuthSession();
@@ -1093,6 +1101,7 @@ export default function RecruiterLogin() {
         <PasswordChangeModal
           isOpen={showPasswordChangeModal}
           onClose={() => setShowPasswordChangeModal(false)}
+          onPasswordChanged={handlePasswordChanged}
           recruiterName={recruiter.name}
           recruiterId={recruiter.rid}
         />

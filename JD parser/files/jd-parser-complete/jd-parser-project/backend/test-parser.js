@@ -1,5 +1,5 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-require('dotenv').config();
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+require("dotenv").config();
 
 // Sample JD 1: Home Loan Sales Officer
 const sampleJD1 = `Function- Home loan
@@ -80,13 +80,15 @@ KPA & Activities:
 
 async function testJDParsing() {
   try {
-    console.log('🧪 Testing JD Parser with Gemini AI\n');
-    console.log('='.repeat(80));
+    console.log("🧪 Testing JD Parser with Gemini AI\n");
+    console.log("=".repeat(80));
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    const prompt = (jdText) => `You are an expert HR data extraction system. Extract the following information from the job description below and return it as valid JSON only (no markdown, no explanation).
+    const prompt = (
+      jdText,
+    ) => `You are an expert HR data extraction system. Extract the following information from the job description below and return it as valid JSON only (no markdown, no explanation).
 
 Required fields:
 - company_name (string): Extract company name if mentioned, otherwise return "Not Specified"
@@ -115,36 +117,41 @@ ${jdText}
 Return the extracted data as JSON:`;
 
     // Test Sample 1
-    console.log('\n📄 Test Case 1: Home Loan Sales Officer');
-    console.log('-'.repeat(80));
-    
+    console.log("\n📄 Test Case 1: Home Loan Sales Officer");
+    console.log("-".repeat(80));
+
     const result1 = await model.generateContent(prompt(sampleJD1));
     const text1 = result1.response.text();
-    let cleaned1 = text1.trim().replace(/```json\n?/g, '').replace(/```\n?$/g, '');
+    let cleaned1 = text1
+      .trim()
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?$/g, "");
     const parsed1 = JSON.parse(cleaned1);
-    
-    console.log('✅ Parsed Result:');
+
+    console.log("✅ Parsed Result:");
     console.log(JSON.stringify(parsed1, null, 2));
 
     // Test Sample 2
-    console.log('\n\n📄 Test Case 2: Financial Services Associate');
-    console.log('-'.repeat(80));
-    
+    console.log("\n\n📄 Test Case 2: Financial Services Associate");
+    console.log("-".repeat(80));
+
     const result2 = await model.generateContent(prompt(sampleJD2));
     const text2 = result2.response.text();
-    let cleaned2 = text2.trim().replace(/```json\n?/g, '').replace(/```\n?$/g, '');
+    let cleaned2 = text2
+      .trim()
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?$/g, "");
     const parsed2 = JSON.parse(cleaned2);
-    
-    console.log('✅ Parsed Result:');
+
+    console.log("✅ Parsed Result:");
     console.log(JSON.stringify(parsed2, null, 2));
 
-    console.log('\n' + '='.repeat(80));
-    console.log('✅ All tests passed successfully!');
-    console.log('🎉 JD Parser is working correctly with Gemini AI');
-
+    console.log("\n" + "=".repeat(80));
+    console.log("✅ All tests passed successfully!");
+    console.log("🎉 JD Parser is working correctly with Gemini AI");
   } catch (error) {
-    console.error('❌ Test failed:', error.message);
-    console.error('Details:', error);
+    console.error("❌ Test failed:", error.message);
+    console.error("Details:", error);
   }
 }
 

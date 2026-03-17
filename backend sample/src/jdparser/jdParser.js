@@ -1,10 +1,10 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const multer = require('multer');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const pdfParse = require('pdf-parse');
-const mammoth = require('mammoth');
-const { v4: uuidv4 } = require('uuid');
+const multer = require("multer");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const pdfParse = require("pdf-parse");
+const mammoth = require("mammoth");
+const { v4: uuidv4 } = require("uuid");
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
@@ -13,16 +13,20 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain'
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "text/plain",
     ];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only PDF, DOCX, and TXT files are allowed.'));
+      cb(
+        new Error(
+          "Invalid file type. Only PDF, DOCX, and TXT files are allowed.",
+        ),
+      );
     }
-  }
+  },
 });
 
 // Initialize Gemini AI
@@ -31,17 +35,31 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // Extract text from different file types
 async function extractTextFromFile(file) {
   try {
-    if (file.mimetype === 'application/pdf') {
+    console.log(
+      `Extracting text from file: ${file.originalname} (${file.mimetype})`,
+    );
+
+    if (file.mimetype === "application/pdf") {
       const data = await pdfParse(file.buffer);
-      return data.text;
-    } else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      const text = data.text;
+      console.log(`Extracted ${text.length} characters from PDF`);
+      return text;
+    } else if (
+      file.mimetype ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
       const result = await mammoth.extractRawText({ buffer: file.buffer });
-      return result.value;
-    } else if (file.mimetype === 'text/plain') {
-      return file.buffer.toString('utf-8');
+      const text = result.value;
+      console.log(`Extracted ${text.length} characters from DOCX`);
+      return text;
+    } else if (file.mimetype === "text/plain") {
+      const text = file.buffer.toString("utf-8");
+      console.log(`Extracted ${text.length} characters from TXT`);
+      return text;
     }
-    throw new Error('Unsupported file type');
+    throw new Error(`Unsupported file type: ${file.mimetype}`);
   } catch (error) {
+    console.error("Text extraction error:", error);
     throw new Error(`Failed to extract text: ${error.message}`);
   }
 }
@@ -49,7 +67,14 @@ async function extractTextFromFile(file) {
 // Parse JD using Gemini AI
 async function parseJDWithAI(jdText) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    console.log("Starting JD parsing with AI...");
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error(
+        "GEMINI_API_KEY is not configured in environment variables",
+      );
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const prompt = `You are an expert HR data extraction system. Extract the following information from the job description below and return it as valid JSON only (no markdown, no explanation).
 
@@ -82,103 +107,127 @@ Return the extracted data as JSON:`;
     const result = await model.generateContent(prompt);
     const response = result.response;
     const text = response.text();
-    
+    console.log("Raw Gemini response received, cleaning...");
+
     // Clean the response - remove markdown code blocks if present
     let cleanedText = text.trim();
-    if (cleanedText.startsWith('```json')) {
-      cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?$/g, '');
-    } else if (cleanedText.startsWith('```')) {
-      cleanedText = cleanedText.replace(/```\n?/g, '').replace(/```\n?$/g, '');
+    if (cleanedText.startsWith("```json")) {
+      cleanedText = cleanedText
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?$/g, "");
+    } else if (cleanedText.startsWith("```")) {
+      cleanedText = cleanedText.replace(/```\n?/g, "").replace(/```\n?$/g, "");
     }
-    
-    const parsedData = JSON.parse(cleanedText);
-    
+
+    console.log("Cleaned response:", cleanedText.substring(0, 100) + "...");
+
+    let parsedData;
+    try {
+      parsedData = JSON.parse(cleanedText);
+    } catch (jsonError) {
+      console.error("JSON Parse Error:", jsonError.message);
+      console.error("Failed to parse response:", cleanedText);
+      throw new Error(`Invalid JSON response from AI: ${jsonError.message}`);
+    }
+
     // Validate and set defaults
     return {
-      company_name: parsedData.company_name || 'Not Specified',
-      role_name: parsedData.role_name || 'Not Specified',
-      city: parsedData.city || '',
-      state: parsedData.state || '',
-      pincode: parsedData.pincode || '000000',
+      company_name: parsedData.company_name || "Not Specified",
+      role_name: parsedData.role_name || "Not Specified",
+      city: parsedData.city || "",
+      state: parsedData.state || "",
+      pincode: parsedData.pincode || "000000",
       positions_open: parseInt(parsedData.positions_open) || 1,
-      skills: parsedData.skills || '',
-      experience: parsedData.experience || 'Not Specified',
-      salary: parsedData.salary || 'Not Specified',
-      qualification: parsedData.qualification || '',
-      benefits: parsedData.benefits || '',
+      skills: parsedData.skills || "",
+      experience: parsedData.experience || "Not Specified",
+      salary: parsedData.salary || "Not Specified",
+      qualification: parsedData.qualification || "",
+      benefits: parsedData.benefits || "",
       job_description: parsedData.job_description || jdText,
       revenue: 0, // Default revenue
-      access_mode: 'open' // Default access mode
+      access_mode: "open", // Default access mode
     };
   } catch (error) {
-    console.error('AI Parsing Error:', error);
+    console.error("AI Parsing Error:", error);
     throw new Error(`Failed to parse JD with AI: ${error.message}`);
   }
 }
 
 // Route: Upload and parse JD file
-router.post('/upload', upload.single('jdFile'), async (req, res) => {
+router.post("/upload", upload.single("jdFile"), async (req, res) => {
   try {
+    console.log("[JD Parser] Upload request received");
+
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      console.log("[JD Parser] No file uploaded");
+      return res.status(400).json({ error: "No file uploaded" });
     }
+
+    console.log(`[JD Parser] Processing file: ${req.file.originalname}`);
 
     // Extract text from file
     const jdText = await extractTextFromFile(req.file);
-    
+
     if (!jdText || jdText.trim().length === 0) {
-      return res.status(400).json({ error: 'Could not extract text from file' });
+      console.log("[JD Parser] Extracted text is empty");
+      return res
+        .status(400)
+        .json({ error: "Could not extract text from file" });
     }
+
+    console.log("[JD Parser] Text extraction successful, starting AI parsing");
 
     // Parse with AI
     const parsedData = await parseJDWithAI(jdText);
 
+    console.log("[JD Parser] Parsing successful");
+
     res.json({
       success: true,
       data: parsedData,
-      originalFileName: req.file.originalname
+      originalFileName: req.file.originalname,
     });
   } catch (error) {
-    console.error('Upload/Parse Error:', error);
-    res.status(500).json({ 
-      error: 'Failed to process JD file', 
-      details: error.message 
+    console.error("[JD Parser] Upload/Parse Error:", error);
+    res.status(500).json({
+      error: "Failed to process JD file",
+      details: error.message,
     });
   }
 });
 
 // Route: Parse text directly (for testing or manual input)
-router.post('/parse-text', async (req, res) => {
+router.post("/parse-text", async (req, res) => {
   try {
     const { jdText } = req.body;
-    
+
     if (!jdText || jdText.trim().length === 0) {
-      return res.status(400).json({ error: 'No JD text provided' });
+      return res.status(400).json({ error: "No JD text provided" });
     }
 
     const parsedData = await parseJDWithAI(jdText);
 
     res.json({
       success: true,
-      data: parsedData
+      data: parsedData,
     });
   } catch (error) {
-    console.error('Parse Text Error:', error);
-    res.status(500).json({ 
-      error: 'Failed to parse JD text', 
-      details: error.message 
+    console.error("Parse Text Error:", error);
+    res.status(500).json({
+      error: "Failed to parse JD text",
+      details: error.message,
     });
   }
 });
 
 // Route: Save parsed JD to database
-router.post('/save', async (req, res) => {
+router.post("/save", async (req, res) => {
   try {
-    const db = req.app.get('db');
+    const db = req.app.get("db");
     const { recruiter_rid, parsedData } = req.body;
 
     if (!parsedData) {
-      return res.status(400).json({ error: 'No parsed data provided' });
+      return res.status(400).json({ error: "No parsed data provided" });
     }
 
     // Generate JID
@@ -209,7 +258,7 @@ router.post('/save', async (req, res) => {
       parsedData.qualification,
       parsedData.benefits,
       parsedData.revenue || 0,
-      parsedData.access_mode || 'open'
+      parsedData.access_mode || "open",
     ];
 
     const [result] = await db.execute(query, values);
@@ -217,13 +266,13 @@ router.post('/save', async (req, res) => {
     res.json({
       success: true,
       jid: jid,
-      message: 'Job posting created successfully'
+      message: "Job posting created successfully",
     });
   } catch (error) {
-    console.error('Save JD Error:', error);
-    res.status(500).json({ 
-      error: 'Failed to save job posting', 
-      details: error.message 
+    console.error("Save JD Error:", error);
+    res.status(500).json({
+      error: "Failed to save job posting",
+      details: error.message,
     });
   }
 });
