@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import PerformanceMetricCard from "./PerformanceMetricCard";
+import ResumeStatusActionModal from "./ResumeStatusActionModal";
 import { fetchRecruiterDashboard } from "../../services/performanceService";
 import { getAuthToken } from "../../auth/session";
 import { API_BASE_URL } from "../../config/api";
 
-const toDisplay = (value) => (value === null || value === undefined ? "-" : value);
+const toDisplay = (value) =>
+  value === null || value === undefined ? "-" : value;
 const getPointsProgressColor = (points) => {
   if (points <= 25) return "danger";
   if (points <= 75) return "warning";
@@ -16,12 +18,17 @@ export default function RecruiterDashboard({ recruiterId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filters, setFilters] = useState({ startDate: "", endDate: "" });
-  const [appliedFilters, setAppliedFilters] = useState({ startDate: "", endDate: "" });
+  const [appliedFilters, setAppliedFilters] = useState({
+    startDate: "",
+    endDate: "",
+  });
   const [filterError, setFilterError] = useState("");
   const [statusResumes, setStatusResumes] = useState([]);
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState("");
   const [activeStatus, setActiveStatus] = useState("");
+  const [actionModalOpen, setActionModalOpen] = useState(false);
+  const [selectedResumeForAction, setSelectedResumeForAction] = useState(null);
 
   useEffect(() => {
     if (!recruiterId) return;
@@ -31,7 +38,10 @@ export default function RecruiterDashboard({ recruiterId }) {
       setLoading(true);
       setError("");
       try {
-        const response = await fetchRecruiterDashboard(recruiterId, appliedFilters);
+        const response = await fetchRecruiterDashboard(
+          recruiterId,
+          appliedFilters,
+        );
         if (!active) return;
         setData(response);
       } catch (loadError) {
@@ -83,7 +93,9 @@ export default function RecruiterDashboard({ recruiterId }) {
     try {
       return JSON.parse(raw);
     } catch {
-      throw new Error(`Server returned non-JSON response (${response.status}).`);
+      throw new Error(
+        `Server returned non-JSON response (${response.status}).`,
+      );
     }
   };
 
@@ -94,18 +106,23 @@ export default function RecruiterDashboard({ recruiterId }) {
       `${API_BASE_URL}/api/recruiters/${encodeURIComponent(recruiterId)}/resumes`,
       {
         headers: { Authorization: `Bearer ${token}` },
-      }
+      },
     );
     const payload = await readJsonResponse(response);
     if (!response.ok) {
       throw new Error(
-        payload?.error || payload?.message || "Failed to fetch recruiter resumes."
+        payload?.error ||
+          payload?.message ||
+          "Failed to fetch recruiter resumes.",
       );
     }
     return Array.isArray(payload.resumes) ? payload.resumes : [];
   };
 
-  const normalizeStatus = (value) => String(value || "").trim().toLowerCase();
+  const normalizeStatus = (value) =>
+    String(value || "")
+      .trim()
+      .toLowerCase();
   const mapStatusToFilter = (status) => {
     const normalized = normalizeStatus(status);
     if (normalized === "submitted") return "submitted";
@@ -144,7 +161,7 @@ export default function RecruiterDashboard({ recruiterId }) {
     let resumes = Array.isArray(statusResumes) ? statusResumes : [];
     if (normalizedStatus && normalizedStatus !== "submitted") {
       resumes = resumes.filter(
-        (resume) => normalizeStatus(resume.workflowStatus) === normalizedStatus
+        (resume) => normalizeStatus(resume.workflowStatus) === normalizedStatus,
       );
     }
     const { startDate, endDate } = appliedFilters;
@@ -162,7 +179,8 @@ export default function RecruiterDashboard({ recruiterId }) {
     return resumes;
   }, [activeStatus, statusResumes, appliedFilters]);
 
-  if (loading) return <p className="chart-empty">Loading performance dashboard...</p>;
+  if (loading)
+    return <p className="chart-empty">Loading performance dashboard...</p>;
   if (error) return <p className="job-message job-message-error">{error}</p>;
   if (!data) return <p className="chart-empty">No dashboard data available.</p>;
 
@@ -292,35 +310,103 @@ export default function RecruiterDashboard({ recruiterId }) {
               Close
             </button>
           </div>
-          {statusLoading ? <p className="chart-empty">Loading resumes...</p> : null}
-          {statusError ? <p className="job-message job-message-error">{statusError}</p> : null}
-          {!statusLoading && !statusError && filteredStatusResumes.length === 0 ? (
+          {statusLoading ? (
+            <p className="chart-empty">Loading resumes...</p>
+          ) : null}
+          {statusError ? (
+            <p className="job-message job-message-error">{statusError}</p>
+          ) : null}
+          {!statusLoading &&
+          !statusError &&
+          filteredStatusResumes.length === 0 ? (
             <p className="chart-empty">No resumes found for this status.</p>
           ) : null}
-          {!statusLoading && !statusError && filteredStatusResumes.length > 0 ? (
+          {!statusLoading &&
+          !statusError &&
+          filteredStatusResumes.length > 0 ? (
             <div className="ui-table-wrap ui-mt-xs">
               <table className="ui-table">
                 <thead>
                   <tr>
                     <th>Candidate</th>
                     <th>Job ID</th>
-                    <th>Recruiter Note</th>
-                    <th>Team Leader Note</th>
+                    <th>Submitted Reason</th>
+                    <th>Verified Reason</th>
+                    <th>
+                      {activeStatus === "walk_in"
+                        ? "Walk In Reason"
+                        : activeStatus === "selected"
+                          ? "Selection Reason"
+                          : activeStatus === "joined"
+                            ? "Joined Reason"
+                            : activeStatus === "dropout"
+                              ? "Dropout Reason"
+                              : activeStatus === "rejected"
+                                ? "Rejection Reason"
+                                : "Current Reason"}
+                    </th>
                     <th>Status</th>
                     <th>Updated</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredStatusResumes.map((resume) => (
-                    <tr key={resume.resId}>
-                      <td>{resume.candidateName || "N/A"}</td>
-                      <td>{resume.jobJid ?? "N/A"}</td>
-                      <td className="table-cell-wrap">{resume.submittedReason || "-"}</td>
-                      <td className="table-cell-wrap">{resume.verifiedReason || "-"}</td>
-                      <td>{String(resume.workflowStatus || "pending").replace(/_/g, " ")}</td>
-                      <td>{formatDateTime(resume.workflowUpdatedAt || resume.uploadedAt)}</td>
-                    </tr>
-                  ))}
+                  {filteredStatusResumes.map((resume) => {
+                    let currentReasonField = null;
+                    if (activeStatus === "walk_in") {
+                      currentReasonField = resume.walkInReason;
+                    } else if (activeStatus === "selected") {
+                      currentReasonField = resume.selectReason;
+                    } else if (activeStatus === "joined") {
+                      currentReasonField = resume.joinedReason;
+                    } else if (activeStatus === "dropout") {
+                      currentReasonField = resume.dropoutReason;
+                    } else if (activeStatus === "rejected") {
+                      currentReasonField = resume.rejectReason;
+                    }
+
+                    return (
+                      <tr key={resume.resId}>
+                        <td>{resume.candidateName || "N/A"}</td>
+                        <td>{resume.jobJid ?? "N/A"}</td>
+                        <td className="table-cell-wrap">
+                          {resume.submittedReason || "-"}
+                        </td>
+                        <td className="table-cell-wrap">
+                          {resume.verifiedReason || "-"}
+                        </td>
+                        <td className="table-cell-wrap">
+                          {currentReasonField || "-"}
+                        </td>
+                        <td>
+                          {String(resume.workflowStatus || "pending").replace(
+                            /_/g,
+                            " ",
+                          )}
+                        </td>
+                        <td>
+                          {formatDateTime(
+                            resume.workflowUpdatedAt || resume.uploadedAt,
+                          )}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="action-btn action-btn-primary"
+                            onClick={() => {
+                              setSelectedResumeForAction({
+                                ...resume,
+                                recruiterRid: recruiterId,
+                              });
+                              setActionModalOpen(true);
+                            }}
+                          >
+                            Take Action
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -350,6 +436,28 @@ export default function RecruiterDashboard({ recruiterId }) {
         </div>
         <div className="points-progress-actions"></div>
       </article>
+
+      <ResumeStatusActionModal
+        isOpen={actionModalOpen}
+        onClose={() => {
+          setActionModalOpen(false);
+          setSelectedResumeForAction(null);
+        }}
+        resume={selectedResumeForAction}
+        currentStatus={selectedResumeForAction?.workflowStatus}
+        onSuccess={async () => {
+          setStatusError("");
+          setStatusLoading(true);
+          try {
+            const resumes = await fetchRecruiterResumes();
+            setStatusResumes(resumes);
+          } catch (loadError) {
+            setStatusError(loadError.message || "Failed to reload resumes.");
+          } finally {
+            setStatusLoading(false);
+          }
+        }}
+      />
     </section>
   );
 }

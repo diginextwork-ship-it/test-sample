@@ -28,6 +28,7 @@ const REASON_OPTIONS = [
 export default function AdminRevenue({ setCurrentPage }) {
   const [entries, setEntries] = useState([]);
   const [recruiters, setRecruiters] = useState([]);
+  const [reimbursements, setReimbursements] = useState([]);
   const [summary, setSummary] = useState({ totalIntake: 0, totalExpense: 0, netProfit: 0 });
   const [searchFilters, setSearchFilters] = useState({
     fromDate: "",
@@ -48,6 +49,7 @@ export default function AdminRevenue({ setCurrentPage }) {
   const [uploadInputKey, setUploadInputKey] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [decisionBusyId, setDecisionBusyId] = useState(null);
 
   const loadRevenue = async () => {
     setIsLoading(true);
@@ -77,6 +79,22 @@ export default function AdminRevenue({ setCurrentPage }) {
     }
   };
 
+  const loadReimbursements = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/reimbursements`, {
+        headers: getAdminHeaders(),
+      });
+      const data = await readJsonResponse(response, "Failed to parse reimbursements response.");
+      if (!response.ok) {
+        throw new Error(data?.message || "Failed to fetch reimbursements.");
+      }
+      setReimbursements(Array.isArray(data.reimbursements) ? data.reimbursements : []);
+    } catch (error) {
+      setReimbursements([]);
+      setErrorMessage(error.message || "Failed to fetch reimbursements.");
+    }
+  };
+
   const loadRecruiters = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/admin/recruiters/list`, {
@@ -96,6 +114,7 @@ export default function AdminRevenue({ setCurrentPage }) {
   useEffect(() => {
     loadRevenue();
     loadRecruiters();
+    loadReimbursements();
   }, []);
 
   const filteredEntries = entries.filter((item) => {
@@ -216,6 +235,29 @@ export default function AdminRevenue({ setCurrentPage }) {
       setErrorMessage(error.message || "Failed to remove revenue entry.");
     } finally {
       setIsDeletingId(null);
+    }
+  };
+
+  const handleReimbursementDecision = async (id, decision) => {
+    setDecisionBusyId(id);
+    setStatusMessage("");
+    setErrorMessage("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin/reimbursements/${id}/decision`, {
+        method: "POST",
+        headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+      });
+      const data = await readJsonResponse(response, "Failed to parse reimbursement decision response.");
+      if (!response.ok) {
+        throw new Error(data?.message || "Failed to update reimbursement.");
+      }
+      setStatusMessage(`Reimbursement #${id} marked as ${decision}.`);
+      await Promise.all([loadReimbursements(), loadRevenue()]);
+    } catch (error) {
+      setErrorMessage(error.message || "Failed to update reimbursement.");
+    } finally {
+      setDecisionBusyId(null);
     }
   };
 
@@ -344,6 +386,67 @@ export default function AdminRevenue({ setCurrentPage }) {
             {isSubmitting ? "Saving..." : "Add Entry"}
           </button>
         </form>
+      </div>
+
+      <div className="admin-dashboard-card admin-card-large">
+        <h2 style={{ marginTop: 0 }}>Reimbursement requests</h2>
+        {reimbursements.length === 0 ? (
+          <p className="admin-chart-empty">No reimbursement requests yet.</p>
+        ) : (
+          <div className="admin-table-wrap">
+            <table className="admin-table admin-table-wide">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>RID</th>
+                  <th>Role</th>
+                  <th>Amount</th>
+                  <th>Description</th>
+                  <th>Status</th>
+                  <th>Updated</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reimbursements.map((item) => (
+                  <tr key={item.id}>
+                    <td>#{item.id}</td>
+                    <td>{item.rid}</td>
+                    <td>{item.role}</td>
+                    <td>{toCurrency(item.amount)}</td>
+                    <td>{item.description || "N/A"}</td>
+                    <td>{item.status}</td>
+                    <td>{formatDate(item.updatedAt || item.createdAt)}</td>
+                    <td>
+                      {item.status === "pending" ? (
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          <button
+                            type="button"
+                            className="admin-create-btn"
+                            onClick={() => handleReimbursementDecision(item.id, "accepted")}
+                            disabled={decisionBusyId === item.id}
+                          >
+                            {decisionBusyId === item.id ? "Saving..." : "Accept"}
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-back-btn"
+                            onClick={() => handleReimbursementDecision(item.id, "rejected")}
+                            disabled={decisionBusyId === item.id}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className={`status-pill status-${item.status}`}>{item.status}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="admin-dashboard-card admin-card-large">

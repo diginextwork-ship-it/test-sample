@@ -182,10 +182,17 @@ const ensureColumnMatchesReference = async ({
   const currentColumnSql = buildColumnSql(currentMetadata, fallbackSql);
   const needsColumnSync =
     !currentMetadata ||
-    String(currentColumnSql).toLowerCase() !== String(targetColumnSql).toLowerCase();
+    String(currentColumnSql).toLowerCase() !==
+      String(targetColumnSql).toLowerCase();
 
-  if (needsColumnSync && constraintName && (await constraintExists(tableName, constraintName))) {
-    await pool.query(`ALTER TABLE ${tableName} DROP FOREIGN KEY ${constraintName}`);
+  if (
+    needsColumnSync &&
+    constraintName &&
+    (await constraintExists(tableName, constraintName))
+  ) {
+    await pool.query(
+      `ALTER TABLE ${tableName} DROP FOREIGN KEY ${constraintName}`,
+    );
   }
 
   if (!currentMetadata) {
@@ -243,7 +250,9 @@ const ensureJobsTableColumns = async () => {
   }
 
   if (!(await indexExists("jobs", "idx_jobs_recruiter_rid"))) {
-    await pool.query("CREATE INDEX idx_jobs_recruiter_rid ON jobs (recruiter_rid)");
+    await pool.query(
+      "CREATE INDEX idx_jobs_recruiter_rid ON jobs (recruiter_rid)",
+    );
   }
 
   if (await columnExists("jobs", "qualification")) {
@@ -355,13 +364,23 @@ const ensureRecruiterAttendanceTable = async () => {
     );
   }
 
-  if (!(await indexExists("recruiter_attendance", "idx_recruiter_attendance_date_status"))) {
+  if (
+    !(await indexExists(
+      "recruiter_attendance",
+      "idx_recruiter_attendance_date_status",
+    ))
+  ) {
     await pool.query(
       "CREATE INDEX idx_recruiter_attendance_date_status ON recruiter_attendance (attendance_date, status)",
     );
   }
 
-  if (!(await indexExists("recruiter_attendance", "idx_recruiter_attendance_money_sum_id"))) {
+  if (
+    !(await indexExists(
+      "recruiter_attendance",
+      "idx_recruiter_attendance_money_sum_id",
+    ))
+  ) {
     await pool.query(
       "CREATE INDEX idx_recruiter_attendance_money_sum_id ON recruiter_attendance (money_sum_id)",
     );
@@ -479,6 +498,18 @@ const ensureResumesDataTable = async () => {
       "ALTER TABLE resumes_data ADD COLUMN accepted_by_admin VARCHAR(50) NULL",
     );
   }
+
+  // Used to detect duplicate resume uploads across the whole table.
+  if (!(await columnExists("resumes_data", "file_hash"))) {
+    await pool.query(
+      "ALTER TABLE resumes_data ADD COLUMN file_hash CHAR(64) NULL",
+    );
+  }
+  if (!(await indexExists("resumes_data", "idx_resumes_data_file_hash"))) {
+    await pool.query(
+      "CREATE UNIQUE INDEX idx_resumes_data_file_hash ON resumes_data (file_hash)",
+    );
+  }
 };
 
 const ensureExtraInfoTable = async () => {
@@ -510,43 +541,67 @@ const ensureExtraInfoTable = async () => {
   );
 
   if (!(await columnExists("extra_info", "res_id"))) {
-    await pool.query("ALTER TABLE extra_info ADD COLUMN res_id VARCHAR(30) NULL");
+    await pool.query(
+      "ALTER TABLE extra_info ADD COLUMN res_id VARCHAR(30) NULL",
+    );
   }
   if (!(await columnExists("extra_info", "resume_id"))) {
-    await pool.query("ALTER TABLE extra_info ADD COLUMN resume_id VARCHAR(30) NULL");
+    await pool.query(
+      "ALTER TABLE extra_info ADD COLUMN resume_id VARCHAR(30) NULL",
+    );
   }
   if (!(await columnExists("extra_info", "job_jid"))) {
-    await pool.query(`ALTER TABLE extra_info ADD COLUMN job_jid ${jobJidColumnSql} NULL`);
+    await pool.query(
+      `ALTER TABLE extra_info ADD COLUMN job_jid ${jobJidColumnSql} NULL`,
+    );
   }
   if (!(await columnExists("extra_info", "recruiter_rid"))) {
-    await pool.query("ALTER TABLE extra_info ADD COLUMN recruiter_rid VARCHAR(50) NULL");
+    await pool.query(
+      "ALTER TABLE extra_info ADD COLUMN recruiter_rid VARCHAR(50) NULL",
+    );
   }
   if (!(await columnExists("extra_info", "rid"))) {
     await pool.query("ALTER TABLE extra_info ADD COLUMN rid VARCHAR(50) NULL");
   }
   if (!(await columnExists("extra_info", "candidate_name"))) {
-    await pool.query("ALTER TABLE extra_info ADD COLUMN candidate_name VARCHAR(255) NULL");
+    await pool.query(
+      "ALTER TABLE extra_info ADD COLUMN candidate_name VARCHAR(255) NULL",
+    );
   }
   if (!(await columnExists("extra_info", "applicant_name"))) {
-    await pool.query("ALTER TABLE extra_info ADD COLUMN applicant_name VARCHAR(255) NULL");
+    await pool.query(
+      "ALTER TABLE extra_info ADD COLUMN applicant_name VARCHAR(255) NULL",
+    );
   }
   if (!(await columnExists("extra_info", "candidate_email"))) {
-    await pool.query("ALTER TABLE extra_info ADD COLUMN candidate_email VARCHAR(190) NULL");
+    await pool.query(
+      "ALTER TABLE extra_info ADD COLUMN candidate_email VARCHAR(190) NULL",
+    );
   }
   if (!(await columnExists("extra_info", "applicant_email"))) {
-    await pool.query("ALTER TABLE extra_info ADD COLUMN applicant_email VARCHAR(190) NULL");
+    await pool.query(
+      "ALTER TABLE extra_info ADD COLUMN applicant_email VARCHAR(190) NULL",
+    );
   }
   if (!(await columnExists("extra_info", "email"))) {
-    await pool.query("ALTER TABLE extra_info ADD COLUMN email VARCHAR(190) NULL");
+    await pool.query(
+      "ALTER TABLE extra_info ADD COLUMN email VARCHAR(190) NULL",
+    );
   }
   if (!(await columnExists("extra_info", "phone"))) {
-    await pool.query("ALTER TABLE extra_info ADD COLUMN phone VARCHAR(20) NULL");
+    await pool.query(
+      "ALTER TABLE extra_info ADD COLUMN phone VARCHAR(20) NULL",
+    );
   }
   if (!(await columnExists("extra_info", "submitted_reason"))) {
-    await pool.query("ALTER TABLE extra_info ADD COLUMN submitted_reason TEXT NULL");
+    await pool.query(
+      "ALTER TABLE extra_info ADD COLUMN submitted_reason TEXT NULL",
+    );
   }
   if (!(await columnExists("extra_info", "verified_reason"))) {
-    await pool.query("ALTER TABLE extra_info ADD COLUMN verified_reason TEXT NULL");
+    await pool.query(
+      "ALTER TABLE extra_info ADD COLUMN verified_reason TEXT NULL",
+    );
   }
   if (!(await columnExists("extra_info", "updated_at"))) {
     await pool.query(
@@ -555,16 +610,24 @@ const ensureExtraInfoTable = async () => {
   }
 
   if (!(await indexExists("extra_info", "uniq_extra_info_res_id"))) {
-    await pool.query("CREATE UNIQUE INDEX uniq_extra_info_res_id ON extra_info (res_id)");
+    await pool.query(
+      "CREATE UNIQUE INDEX uniq_extra_info_res_id ON extra_info (res_id)",
+    );
   }
   if (!(await indexExists("extra_info", "uniq_extra_info_resume_id"))) {
-    await pool.query("CREATE UNIQUE INDEX uniq_extra_info_resume_id ON extra_info (resume_id)");
+    await pool.query(
+      "CREATE UNIQUE INDEX uniq_extra_info_resume_id ON extra_info (resume_id)",
+    );
   }
   if (!(await indexExists("extra_info", "idx_extra_info_job_jid"))) {
-    await pool.query("CREATE INDEX idx_extra_info_job_jid ON extra_info (job_jid)");
+    await pool.query(
+      "CREATE INDEX idx_extra_info_job_jid ON extra_info (job_jid)",
+    );
   }
   if (!(await indexExists("extra_info", "idx_extra_info_recruiter_rid"))) {
-    await pool.query("CREATE INDEX idx_extra_info_recruiter_rid ON extra_info (recruiter_rid)");
+    await pool.query(
+      "CREATE INDEX idx_extra_info_recruiter_rid ON extra_info (recruiter_rid)",
+    );
   }
   if (!(await indexExists("extra_info", "idx_extra_info_rid"))) {
     await pool.query("CREATE INDEX idx_extra_info_rid ON extra_info (rid)");
@@ -577,6 +640,52 @@ const ensureResumeIdSequenceTable = async () => {
       seq_id BIGINT AUTO_INCREMENT PRIMARY KEY
     )`,
   );
+};
+
+const ensureReimbursementsTable = async () => {
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS reimbursements (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      rid VARCHAR(50) NOT NULL,
+      role VARCHAR(30) NOT NULL,
+      amount DECIMAL(14,2) NOT NULL,
+      description TEXT NULL,
+      status ENUM('pending','accepted','rejected') NOT NULL DEFAULT 'pending',
+      money_sum_id BIGINT NULL,
+      admin_note TEXT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_reimbursements_rid (rid),
+      INDEX idx_reimbursements_status (status),
+      INDEX idx_reimbursements_money_sum_id (money_sum_id),
+      CONSTRAINT fk_reimbursements_money_sum
+        FOREIGN KEY (money_sum_id) REFERENCES money_sum(id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+    )`,
+  );
+
+  // Add money_sum_id column if it doesn't exist
+  if (!(await columnExists("reimbursements", "money_sum_id"))) {
+    await pool.query(
+      "ALTER TABLE reimbursements ADD COLUMN money_sum_id BIGINT NULL",
+    );
+    await pool.query(
+      "ALTER TABLE reimbursements ADD INDEX idx_reimbursements_money_sum_id (money_sum_id)",
+    );
+    try {
+      await pool.query(
+        `ALTER TABLE reimbursements ADD CONSTRAINT fk_reimbursements_money_sum
+         FOREIGN KEY (money_sum_id) REFERENCES money_sum(id)
+         ON UPDATE CASCADE ON DELETE SET NULL`,
+      );
+    } catch (err) {
+      // Constraint might already exist or money_sum table doesn't exist yet
+      console.log(
+        "Note: Foreign key constraint might not be created yet:",
+        err.message,
+      );
+    }
+  }
 };
 
 const ensureApplicationColumns = async () => {
@@ -795,7 +904,12 @@ const ensureMoneySumTable = async () => {
   }
   const reasonMetadata = await getColumnMetadata("money_sum", "reason");
   const reasonType = String(reasonMetadata?.dataType || "").toLowerCase();
-  if (reasonType && reasonType !== "text" && reasonType !== "mediumtext" && reasonType !== "longtext") {
+  if (
+    reasonType &&
+    reasonType !== "text" &&
+    reasonType !== "mediumtext" &&
+    reasonType !== "longtext"
+  ) {
     await pool.query("ALTER TABLE money_sum MODIFY COLUMN reason TEXT NULL");
   }
 
@@ -916,7 +1030,12 @@ const ensureJobAccessControlSchema = async () => {
     );
   }
 
-  if (!(await indexExists("job_recruiter_access", "idx_job_recruiter_access_job_rid"))) {
+  if (
+    !(await indexExists(
+      "job_recruiter_access",
+      "idx_job_recruiter_access_job_rid",
+    ))
+  ) {
     await pool.query(
       "CREATE INDEX idx_job_recruiter_access_job_rid ON job_recruiter_access (job_jid, recruiter_rid)",
     );
@@ -998,9 +1117,10 @@ const initDatabase = async () => {
   await ensureJobsTableColumns();
   await ensureResumesDataTable();
   await ensureExtraInfoTable();
+  await ensureMoneySumTable();
+  await ensureReimbursementsTable();
   await ensureApplicationColumns();
   await ensureJobResumeSelectionTable();
-  await ensureMoneySumTable();
   await ensureRecruiterAttendanceTable();
   await ensureJobAccessControlSchema();
   await ensureStatusTable();

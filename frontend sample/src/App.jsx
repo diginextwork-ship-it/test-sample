@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import { NotificationProvider } from "./context/NotificationContext";
+import NotificationContainer from "./context/NotificationContainer";
 import Home from "./pages/Home";
 import AboutUs from "./pages/AboutUs";
 import Contact from "./pages/contact";
@@ -74,9 +76,12 @@ const getPageFromPath = (pathname) => {
   if (normalizedPath === "/admin-panel") return "adminpanel";
   if (normalizedPath === "/admin-panel/create-recruiter") return "admincreate";
   if (normalizedPath === "/admin-panel/top-resumes") return "admintopresumes";
-  if (normalizedPath === "/admin-panel/recruiter-uploads") return "adminuploads";
-  if (normalizedPath === "/admin-panel/candidate-submitted-resumes") return "admincandidateresumes";
-  if (normalizedPath === "/admin-panel/manual-selection") return "adminmanualselection";
+  if (normalizedPath === "/admin-panel/recruiter-uploads")
+    return "adminuploads";
+  if (normalizedPath === "/admin-panel/candidate-submitted-resumes")
+    return "admincandidateresumes";
+  if (normalizedPath === "/admin-panel/manual-selection")
+    return "adminmanualselection";
   if (normalizedPath === "/admin-panel/revenue") return "adminrevenue";
   if (normalizedPath === "/admin-panel/attendance") return "adminattendance";
   return "notfound";
@@ -84,10 +89,15 @@ const getPageFromPath = (pathname) => {
 
 export default function App() {
   const [authSession, setAuthSession] = useState(() => getAuthSession());
-  const [currentPage, setCurrentPageState] = useState(() => getPageFromPath(window.location.pathname));
+  const [currentPage, setCurrentPageState] = useState(() =>
+    getPageFromPath(window.location.pathname),
+  );
   const isAdmin = useMemo(
-    () => String(authSession?.role || "").trim().toLowerCase() === "admin",
-    [authSession?.role]
+    () =>
+      String(authSession?.role || "")
+        .trim()
+        .toLowerCase() === "admin",
+    [authSession?.role],
   );
   const guardedPage =
     ADMIN_ONLY_PAGES.has(currentPage) && !isAdmin ? "adminlogin" : currentPage;
@@ -158,7 +168,9 @@ export default function App() {
           />
         );
       case "adminpanel":
-        return <AdminPanel setCurrentPage={setCurrentPage} onLogout={handleLogout} />;
+        return (
+          <AdminPanel setCurrentPage={setCurrentPage} onLogout={handleLogout} />
+        );
       case "admincreate":
         return <AdminCreateRecruiter setCurrentPage={setCurrentPage} />;
       case "admintopresumes":
@@ -192,12 +204,19 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      {currentPage === "home" ? (
-        <Navbar setCurrentPage={setCurrentPage} currentPage={currentPage} />
-      ) : null}
-      {renderPage()}
-      <Footer setCurrentPage={setCurrentPage} minimal={currentPage !== "home"} isAdmin={isAdmin} />
-    </div>
+    <NotificationProvider>
+      <div className="app">
+        {currentPage === "home" ? (
+          <Navbar setCurrentPage={setCurrentPage} currentPage={currentPage} />
+        ) : null}
+        {renderPage()}
+        <Footer
+          setCurrentPage={setCurrentPage}
+          minimal={currentPage !== "home"}
+          isAdmin={isAdmin}
+        />
+        <NotificationContainer />
+      </div>
+    </NotificationProvider>
   );
 }

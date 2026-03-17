@@ -137,7 +137,9 @@ CREATE TABLE IF NOT EXISTS resumes_data (
   ats_score DECIMAL(5,2) NULL,
   ats_match_percentage DECIMAL(5,2) NULL,
   ats_raw_json JSON NULL,
+  file_hash VARCHAR(64) NULL,
   uploaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE INDEX idx_resumes_data_file_hash (file_hash),
   INDEX idx_resumes_data_rid (rid),
   INDEX idx_resumes_data_job_jid (job_jid),
   INDEX idx_resumes_data_uploaded_at (uploaded_at),
@@ -171,6 +173,20 @@ CREATE TABLE IF NOT EXISTS extra_info (
   INDEX idx_extra_info_rid (rid)
 );
 
+ALTER TABLE extra_info
+  ADD COLUMN IF NOT EXISTS walk_in_reason TEXT NULL;
+ALTER TABLE extra_info
+  ADD COLUMN IF NOT EXISTS select_reason TEXT NULL;
+ALTER TABLE extra_info
+  ADD COLUMN IF NOT EXISTS joined_reason TEXT NULL;
+ALTER TABLE extra_info
+  ADD COLUMN IF NOT EXISTS dropout_reason TEXT NULL;
+ALTER TABLE extra_info
+  ADD COLUMN IF NOT EXISTS reject_reason TEXT NULL;
+
+ALTER TABLE job_resume_selection
+  MODIFY COLUMN selection_status ENUM('selected', 'rejected', 'on_hold', 'verified', 'walk_in', 'joined', 'dropout', 'pending') NOT NULL DEFAULT 'selected';
+
 ALTER TABLE resumes_data
   ADD COLUMN IF NOT EXISTS submitted_by_role VARCHAR(30) NULL DEFAULT 'recruiter';
 ALTER TABLE resumes_data
@@ -183,6 +199,9 @@ ALTER TABLE resumes_data
   ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP NULL DEFAULT NULL;
 ALTER TABLE resumes_data
   ADD COLUMN IF NOT EXISTS accepted_by_admin VARCHAR(50) NULL;
+ALTER TABLE resumes_data
+  ADD COLUMN IF NOT EXISTS file_hash VARCHAR(64) NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_resumes_data_file_hash ON resumes_data (file_hash);
 
 CREATE TABLE IF NOT EXISTS resume_id_sequence (
   seq_id BIGINT AUTO_INCREMENT PRIMARY KEY
@@ -204,6 +223,25 @@ CREATE TABLE IF NOT EXISTS job_resume_selection (
   CONSTRAINT fk_job_resume_selection_resume
     FOREIGN KEY (res_id) REFERENCES resumes_data(res_id)
     ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS reimbursements (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  rid VARCHAR(50) NOT NULL,
+  role VARCHAR(30) NOT NULL,
+  amount DECIMAL(14,2) NOT NULL,
+  description TEXT NULL,
+  status ENUM('pending','accepted','rejected') NOT NULL DEFAULT 'pending',
+  money_sum_id BIGINT NULL,
+  admin_note TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_reimbursements_rid (rid),
+  INDEX idx_reimbursements_status (status),
+  INDEX idx_reimbursements_money_sum_id (money_sum_id),
+  CONSTRAINT fk_reimbursements_money_sum
+    FOREIGN KEY (money_sum_id) REFERENCES money_sum(id)
+    ON UPDATE CASCADE ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS money_sum (
@@ -279,3 +317,7 @@ CREATE TABLE IF NOT EXISTS status (
     FOREIGN KEY (recruiter_rid) REFERENCES recruiter(rid)
     ON UPDATE CASCADE ON DELETE CASCADE
 );
+
+-- Add password change tracking for first-time login
+ALTER TABLE recruiter
+  ADD COLUMN IF NOT EXISTS password_changed BOOLEAN NOT NULL DEFAULT FALSE;

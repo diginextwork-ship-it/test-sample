@@ -1739,6 +1739,128 @@ router.get("/api/admin/revenue", async (req, res) => {
   }
 });
 
+router.get("/api/admin/reimbursements", async (req, res) => {
+  if (!ensureAdminAuthorized(req, res)) return;
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, rid, role, amount, description, status, admin_note AS adminNote, created_at AS createdAt, updated_at AS updatedAt
+       FROM reimbursements
+       ORDER BY created_at DESC`,
+    );
+    return res.status(200).json({ reimbursements: rows });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch reimbursements.",
+      error: error.message,
+    });
+  }
+});
+
+router.post("/api/admin/reimbursements/:id/decision", async (req, res) => {
+  if (!ensureAdminAuthorized(req, res)) return;
+  const id = Number(req.params.id);
+  const decision = String(req.body?.decision || "")
+    .trim()
+    .toLowerCase();
+  const adminNote = String(req.body?.adminNote || "").trim();
+  if (!id)
+    return res
+      .status(400)
+      .json({ message: "Valid reimbursement id is required." });
+  if (!["accepted", "rejected"].includes(decision)) {
+    return res
+      .status(400)
+      .json({ message: "decision must be 'accepted' or 'rejected'." });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    console.log(
+      `[ReimbursementDecision] Processing decision: id=${id}, decision=${decision}`,
+    );
+
+    const [rows] = await connection.query(
+      "SELECT id, rid, amount, description, status, money_sum_id FROM reimbursements WHERE id = ? FOR UPDATE",
+      [id],
+    );
+    if (rows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Reimbursement not found." });
+    }
+    const current = rows[0];
+    console.log(`[ReimbursementDecision] Current reimbursement:`, current);
+
+    if (current.status !== "pending") {
+      await connection.rollback();
+      return res
+        .status(400)
+        .json({ message: "Reimbursement already decided." });
+    }
+
+    await connection.query(
+      `UPDATE reimbursements
+       SET status = ?, admin_note = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [decision, adminNote || null, id],
+    );
+
+    // Handle money_sum updates
+    if (decision === "rejected" && current.money_sum_id) {
+      console.log(
+        `[ReimbursementDecision] Processing rejection with money_sum_id=${current.money_sum_id}`,
+      );
+      // If rejected, create a reversal entry to negate the original expense
+      const [moneySumRow] = await connection.query(
+        "SELECT profit FROM money_sum WHERE id = ?",
+        [current.money_sum_id],
+      );
+      if (moneySumRow.length > 0) {
+        const currentProfit = toMoneyNumber(moneySumRow[0].profit);
+        const expense = toMoneyNumber(current.amount);
+        // Reversal: add back the expense to profit
+        const reversedProfit =
+          Math.round((currentProfit + expense) * 100) / 100;
+        const reason = `Reimbursement REJECTED for RID ${current.rid}: ${current.description || "No description"}`;
+
+        console.log(
+          `[ReimbursementDecision] Creating reversal: currentProfit=${currentProfit}, expense=${expense}, reversedProfit=${reversedProfit}`,
+        );
+
+        await connection.query(
+          `INSERT INTO money_sum (company_rev, expense, profit, reason, entry_type)
+           VALUES (0, ?, ?, ?, 'expense_reversal')`,
+          [-expense, reversedProfit, reason],
+        );
+      }
+    } else if (decision === "accepted" && current.money_sum_id) {
+      console.log(
+        `[ReimbursementDecision] Processing acceptance with money_sum_id=${current.money_sum_id}`,
+      );
+      // If accepted, update the reason to indicate it's confirmed
+      const reason = `Reimbursement ACCEPTED for RID ${current.rid}: ${current.description || "No description"}`;
+      await connection.query(`UPDATE money_sum SET reason = ? WHERE id = ?`, [
+        reason,
+        current.money_sum_id,
+      ]);
+    }
+
+    await connection.commit();
+    console.log(`[ReimbursementDecision] Decision committed successfully`);
+    return res
+      .status(200)
+      .json({ message: "Decision recorded.", status: decision });
+  } catch (error) {
+    console.error(`[ReimbursementDecision] Error:`, error);
+    await connection.rollback();
+    return res
+      .status(500)
+      .json({ message: "Failed to record decision.", error: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
 router.get("/api/admin/recruiters/list", async (req, res) => {
   if (!ensureAdminAuthorized(req, res)) return;
 
@@ -1984,16 +2106,16 @@ router.put("/api/admin/resumes/:resId/verified-reason", async (req, res) => {
     if (result.affectedRows === 0) {
       const insertColumns = ["res_id", "resume_id", "verified_reason"];
       const insertValues = [resId, resId, verifiedReason];
-      const placeholders = insertColumns.map(() => "?").join(", ");
+      const placeholders = ["?", "?", "?"];
 
+      // Avoid passing CURRENT_TIMESTAMP as a string parameter.
       if (hasUpdatedAtColumn) {
         insertColumns.push("updated_at");
-        placeholders.push("?");
-        insertValues.push("CURRENT_TIMESTAMP");
+        placeholders.push("CURRENT_TIMESTAMP");
       }
 
       await pool.query(
-        `INSERT INTO extra_info (${insertColumns.join(", ")}) VALUES (${placeholders})`,
+        `INSERT INTO extra_info (${insertColumns.join(", ")}) VALUES (${placeholders.join(", ")})`,
         insertValues,
       );
     }

@@ -5,6 +5,7 @@ const recruiterRoutes = require("./routes/recruiterRoutes");
 const jobRoutes = require("./routes/jobRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const statusRoutes = require("./routes/statusRoutes");
+const jdParserRoutes = require("./jdparser/jdParser");
 const { createRateLimiter } = require("./middleware/rateLimiter");
 
 const app = express();
@@ -82,6 +83,15 @@ app.use("/api/resumes/submit", submissionRateLimiter);
 app.use("/api/applications", submissionRateLimiter);
 app.use("/api/applications/parse-resume", parseRateLimiter);
 
+const jdParseRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 10,
+  keyPrefix: "jd-parse",
+  message: "Too many JD parse requests. Please wait a minute and retry.",
+});
+app.use("/api/jd/upload", jdParseRateLimiter);
+app.use("/api/jd/parse-text", jdParseRateLimiter);
+
 app.get("/", (_req, res) => {
   res.status(200).json({
     ok: true,
@@ -96,6 +106,7 @@ app.use(recruiterRoutes);
 app.use(jobRoutes);
 app.use(adminRoutes);
 app.use(statusRoutes);
+app.use("/api/jd", jdParserRoutes);
 
 // 404 handler for API routes
 app.use("/api", (_req, res) => {

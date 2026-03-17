@@ -1,0 +1,97 @@
+{
+  "info": {
+    "name": "JD Parser API",
+    "description": "API endpoints for JD Parser - Recruiting Platform",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        },
+        "description": "Check if server is running"
+      }
+    },
+    {
+      "name": "Upload and Parse JD File",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "jdFile",
+              "type": "file",
+              "src": "/path/to/your/jd-file.pdf",
+              "description": "Upload PDF, DOCX, or TXT file"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/jd/upload",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "jd", "upload"]
+        },
+        "description": "Upload a JD file and parse it with AI"
+      }
+    },
+    {
+      "name": "Parse JD Text Directly",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jdText\": \"Function- Home loan\\nDesignation: Sales Officer\\nSalary - 1.80 LPA to 2.10 LPA CTC + Lucrative Incentives\\n\\nJob description:\\n1. Area/Lane/Geography Mapping\\n2. Source Relationship Management\\n3. Maintain Reports\\n\\nCandidate Eligibility:\\n1. Graduate from any stream\\n2. 1 Year experience in sales\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/jd/parse-text",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "jd", "parse-text"]
+        },
+        "description": "Parse JD text directly without file upload"
+      }
+    },
+    {
+      "name": "Save Parsed JD to Database",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"recruiter_rid\": \"REC123\",\n  \"parsedData\": {\n    \"company_name\": \"HDFC Limited\",\n    \"role_name\": \"Sales Officer\",\n    \"city\": \"Mumbai\",\n    \"state\": \"Maharashtra\",\n    \"pincode\": \"400001\",\n    \"positions_open\": 5,\n    \"skills\": \"Sales, Communication, Customer Relationship Management, Reporting\",\n    \"experience\": \"1 Year\",\n    \"salary\": \"1.80 LPA to 2.10 LPA + Incentives\",\n    \"qualification\": \"Graduate from any stream\",\n    \"benefits\": \"Lucrative Incentives\",\n    \"job_description\": \"Full job description here...\",\n    \"revenue\": 0,\n    \"access_mode\": \"open\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/jd/save",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "jd", "save"]
+        },
+        "description": "Save parsed JD data to database"
+      }
+    }
+  ]
+}

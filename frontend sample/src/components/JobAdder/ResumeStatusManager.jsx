@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchMyJobs } from "../../services/jobAccessService";
-import { fetchJobResumeStatuses, updateJobResumeStatus } from "../../services/performanceService";
+import {
+  fetchJobResumeStatuses,
+  updateJobResumeStatus,
+} from "../../services/performanceService";
+import { useNotification } from "../../context/NotificationContext";
 
 const formatLabel = (value) =>
   String(value || "")
@@ -24,10 +28,11 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
   const [message, setMessage] = useState("");
   const [verifyingResumeId, setVerifyingResumeId] = useState("");
   const [verifyNote, setVerifyNote] = useState("");
+  const { addNotification } = useNotification();
 
   const selectedJob = useMemo(
     () => jobs.find((job) => String(job.jid) === String(selectedJobId)) || null,
-    [jobs, selectedJobId]
+    [jobs, selectedJobId],
   );
 
   const loadJobResumes = async (jobId) => {
@@ -91,10 +96,18 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
       setResumes((prev) =>
         prev.map((item) =>
           item.resId === resume.resId
-            ? { ...item, status, updatedAt: new Date().toISOString(), updatedBy: "You" }
-            : item
-        )
+            ? {
+                ...item,
+                status,
+                updatedAt: new Date().toISOString(),
+                updatedBy: "You",
+              }
+            : item,
+        ),
       );
+      const statusLabel = formatLabel(status);
+      const notificationMessage = `Status updated to ${statusLabel} for Resume ID: ${resume.resId} (Job ID: ${selectedJobId})`;
+      addNotification(notificationMessage, "success", 5000);
       setMessage(`Updated ${resume.resId} to ${formatLabel(status)}.`);
       onStatusUpdated?.();
     } catch (updateError) {
@@ -130,11 +143,15 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
                 updatedBy: "You",
                 verifiedReason: normalizedNote || null,
               }
-            : item
-        )
+            : item,
+        ),
       );
       setVerifyingResumeId("");
       setVerifyNote("");
+
+      const notificationMessage = `Status updated to Verified for Resume ID: ${resume.resId} (Job ID: ${selectedJobId})`;
+      addNotification(notificationMessage, "success", 5000);
+
       setMessage(`Verified ${resume.resId}.`);
       onStatusUpdated?.();
     } catch (updateError) {
@@ -154,7 +171,8 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
           {jobs.length === 0 ? <option value="">No jobs found</option> : null}
           {jobs.map((job) => (
             <option key={job.jid} value={job.jid}>
-              #{job.jid} - {job.role_name || "Role"} ({job.company_name || "Company"})
+              #{job.jid} - {job.role_name || "Role"} (
+              {job.company_name || "Company"})
             </option>
           ))}
         </select>
@@ -162,17 +180,22 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
 
       {selectedJob ? (
         <p className="job-message">
-          Managing resumes for job #{selectedJob.jid}: {selectedJob.role_name || "Role"} at{" "}
+          Managing resumes for job #{selectedJob.jid}:{" "}
+          {selectedJob.role_name || "Role"} at{" "}
           {selectedJob.company_name || "Company"}
         </p>
       ) : null}
 
-      {message ? <p className="job-message job-message-success">{message}</p> : null}
+      {message ? (
+        <p className="job-message job-message-success">{message}</p>
+      ) : null}
       {error ? <p className="job-message job-message-error">{error}</p> : null}
       {loading ? <p className="chart-empty">Loading resumes...</p> : null}
 
       {!loading && resumes.length === 0 && selectedJobId ? (
-        <p className="chart-empty">No recruiter resumes submitted for this job yet.</p>
+        <p className="chart-empty">
+          No recruiter resumes submitted for this job yet.
+        </p>
       ) : null}
 
       {!loading && resumes.length > 0 ? (
@@ -200,14 +223,21 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
                   <td>{resume.recruiterName || "N/A"}</td>
                   <td>{resume.resumeFilename || "N/A"}</td>
                   <td>
-                    {resume.atsMatchPercentage === null || resume.atsMatchPercentage === undefined
+                    {resume.atsMatchPercentage === null ||
+                    resume.atsMatchPercentage === undefined
                       ? "N/A"
                       : `${resume.atsMatchPercentage}%`}
                   </td>
-                  <td className="table-cell-wrap">{resume.submittedReason || "-"}</td>
-                  <td className="table-cell-wrap">{resume.verifiedReason || "-"}</td>
+                  <td className="table-cell-wrap">
+                    {resume.submittedReason || "-"}
+                  </td>
+                  <td className="table-cell-wrap">
+                    {resume.verifiedReason || "-"}
+                  </td>
                   <td>
-                    <span className={`status-pill status-${resume.status || "pending"}`}>
+                    <span
+                      className={`status-pill status-${resume.status || "pending"}`}
+                    >
                       {formatLabel(resume.status || "pending")}
                     </span>
                   </td>
@@ -249,7 +279,9 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
                         <textarea
                           id={`verify-note-${resume.resId}`}
                           value={verifyNote}
-                          onChange={(event) => setVerifyNote(event.target.value)}
+                          onChange={(event) =>
+                            setVerifyNote(event.target.value)
+                          }
                           rows={3}
                           placeholder="Optional timing information"
                         />
@@ -275,7 +307,9 @@ export default function ResumeStatusManager({ onStatusUpdated }) {
                       </div>
                     ) : null}
                   </td>
-                  <td>{formatDateTime(resume.updatedAt || resume.uploadedAt)}</td>
+                  <td>
+                    {formatDateTime(resume.updatedAt || resume.uploadedAt)}
+                  </td>
                 </tr>
               ))}
             </tbody>

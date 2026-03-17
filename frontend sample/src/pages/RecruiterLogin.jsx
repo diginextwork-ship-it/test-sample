@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import "../styles/recruiter-login.css";
-import { clearAuthSession, getAuthSession, saveAuthSession } from "../auth/session";
+import {
+  clearAuthSession,
+  getAuthSession,
+  saveAuthSession,
+} from "../auth/session";
 import { API_BASE_URL, BACKEND_CONNECTION_ERROR } from "../config/api";
 import JobsListTable from "../components/JobAdder/JobsListTable";
 import JobAccessControlModal from "../components/JobAdder/JobAccessControlModal";
@@ -8,9 +12,12 @@ import RecruiterMultiSelect from "../components/JobAdder/RecruiterMultiSelect";
 import RecruiterJobsBoard from "../components/Recruiter/RecruiterJobsBoard";
 import RecruiterDashboard from "../components/Recruiter/RecruiterDashboard";
 import TeamLeaderDashboard from "../components/JobAdder/JobAdderDashboard";
+import ReimbursementButton from "../components/ReimbursementButton";
+import PasswordChangeModal from "../components/PasswordChangeModal";
 import { fetchMyJobs, fetchRecruitersList } from "../services/jobAccessService";
 import "../styles/recruiter-jobs-board.css";
 import "../styles/performance-dashboard.css";
+import "../styles/reimbursement.css";
 
 const formatDateTime = (dateValue) => {
   if (!dateValue) return "";
@@ -27,7 +34,7 @@ const readJsonResponse = async (response, fallbackMessage) => {
     return JSON.parse(rawBody);
   } catch {
     throw new Error(
-      `Server returned non-JSON response (${response.status}) for ${response.url}. ${fallbackMessage}`
+      `Server returned non-JSON response (${response.status}) for ${response.url}. ${fallbackMessage}`,
     );
   }
 };
@@ -38,7 +45,10 @@ const toUiJob = (job) => ({
   company: job.company_name || "Unknown company",
   title: job.role_name || "Untitled role",
   positionsOpen: Number(job.positions_open) || 1,
-  revenue: job.revenue === null || job.revenue === undefined ? null : Number(job.revenue),
+  revenue:
+    job.revenue === null || job.revenue === undefined
+      ? null
+      : Number(job.revenue),
   pointsPerJoining: Number(job.points_per_joining) || 0,
   createdAt: job.created_at || null,
   city: job.city || "",
@@ -50,14 +60,19 @@ const toUiJob = (job) => ({
   salary: job.salary || "",
   qualification: job.qualification || "",
   benefits: job.benefits || "",
-  accessMode: String(job.access_mode || "open").trim().toLowerCase() === "restricted"
-    ? "restricted"
-    : "open",
+  accessMode:
+    String(job.access_mode || "open")
+      .trim()
+      .toLowerCase() === "restricted"
+      ? "restricted"
+      : "open",
   recruiterCount: Number(job.recruiterCount) || 0,
 });
 
 const isTeamLeaderRole = (role) => {
-  const normalized = String(role || "").trim().toLowerCase();
+  const normalized = String(role || "")
+    .trim()
+    .toLowerCase();
   return (
     normalized === "team leader" ||
     normalized === "team_leader" ||
@@ -74,6 +89,7 @@ export default function RecruiterLogin() {
   const [isLoadingApplications, setIsLoadingApplications] = useState(false);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [recruiter, setRecruiter] = useState(null);
+  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
   const [applications, setApplications] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
@@ -101,7 +117,13 @@ export default function RecruiterLogin() {
   const [jobMessage, setJobMessage] = useState("");
   const [jobMessageType, setJobMessageType] = useState("");
   const [uploadedResumes, setUploadedResumes] = useState([]);
-  const normalizedRole = String(recruiter?.role || "").trim().toLowerCase();
+  const [jdFile, setJdFile] = useState(null);
+  const [isParsingJD, setIsParsingJD] = useState(false);
+  const [jdParseMessage, setJdParseMessage] = useState("");
+  const [jdParseMessageType, setJdParseMessageType] = useState("");
+  const normalizedRole = String(recruiter?.role || "")
+    .trim()
+    .toLowerCase();
   const canCreateJobs =
     normalizedRole === "job creator" ||
     isTeamLeaderRole(normalizedRole) ||
@@ -110,23 +132,32 @@ export default function RecruiterLogin() {
   const canUploadResumes = normalizedRole === "recruiter";
   const getAuthHeaders = (extraHeaders = {}) => {
     const token = getAuthSession()?.token || "";
-    return token ? { Authorization: `Bearer ${token}`, ...extraHeaders } : extraHeaders;
+    return token
+      ? { Authorization: `Bearer ${token}`, ...extraHeaders }
+      : extraHeaders;
   };
 
   const fetchApplications = async (rid) => {
     setIsLoadingApplications(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/recruiters/${rid}/applications`, {
-        headers: getAuthHeaders(),
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/recruiters/${rid}/applications`,
+        {
+          headers: getAuthHeaders(),
+        },
+      );
       const data = await readJsonResponse(
         response,
-        "Check VITE_API_BASE_URL and backend route setup."
+        "Check VITE_API_BASE_URL and backend route setup.",
       );
       if (!response.ok) {
-        throw new Error(data?.message || "Failed to fetch recruiter applications.");
+        throw new Error(
+          data?.message || "Failed to fetch recruiter applications.",
+        );
       }
-      setApplications(Array.isArray(data.applications) ? data.applications : []);
+      setApplications(
+        Array.isArray(data.applications) ? data.applications : [],
+      );
     } finally {
       setIsLoadingApplications(false);
     }
@@ -145,16 +176,21 @@ export default function RecruiterLogin() {
 
   const fetchAvailableRecruiters = async () => {
     const data = await fetchRecruitersList();
-    setAvailableRecruiters(Array.isArray(data.recruiters) ? data.recruiters : []);
+    setAvailableRecruiters(
+      Array.isArray(data.recruiters) ? data.recruiters : [],
+    );
   };
 
   const fetchRecruiterResumes = async (rid) => {
-    const response = await fetch(`${API_BASE_URL}/api/recruiters/${rid}/resumes`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetch(
+      `${API_BASE_URL}/api/recruiters/${rid}/resumes`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
     const data = await readJsonResponse(
       response,
-      "Check VITE_API_BASE_URL and backend route setup."
+      "Check VITE_API_BASE_URL and backend route setup.",
     );
     if (!response.ok) {
       throw new Error(data?.message || "Failed to fetch resumes.");
@@ -178,7 +214,7 @@ export default function RecruiterLogin() {
 
       const data = await readJsonResponse(
         response,
-        "Check VITE_API_BASE_URL and backend route setup."
+        "Check VITE_API_BASE_URL and backend route setup.",
       );
 
       if (!response.ok) {
@@ -193,6 +229,12 @@ export default function RecruiterLogin() {
         rid: data?.recruiter?.rid,
         name: data?.recruiter?.name,
       });
+
+      // Show password change modal if this is first login (passwordChanged is false)
+      if (data?.recruiter?.passwordChanged === false) {
+        setShowPasswordChangeModal(true);
+      }
+
       setEmail("");
       setPassword("");
     } catch (error) {
@@ -252,6 +294,82 @@ export default function RecruiterLogin() {
     setJobData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleJDFileChange = (event) => {
+    const selectedFile = event.target.files[0];
+    if (selectedFile) {
+      setJdFile(selectedFile);
+      setJdParseMessage("");
+      setJdParseMessageType("");
+    }
+  };
+
+  const handleJDUploadAndParse = async () => {
+    if (!jdFile) {
+      setJdParseMessageType("error");
+      setJdParseMessage("Please select a JD file first.");
+      return;
+    }
+
+    setIsParsingJD(true);
+    setJdParseMessage("");
+    setJdParseMessageType("");
+
+    try {
+      const formData = new FormData();
+      formData.append("jdFile", jdFile);
+
+      const response = await fetch(`${API_BASE_URL}/api/jd/upload`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: formData,
+      });
+
+      const data = await readJsonResponse(
+        response,
+        "Failed to parse JD file. Check backend connection.",
+      );
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to parse JD file.");
+      }
+
+      const parsed = data.data;
+      setJobData((prev) => ({
+        ...prev,
+        company_name: parsed.company_name || prev.company_name,
+        role_name: parsed.role_name || prev.role_name,
+        city: parsed.city || prev.city,
+        state: parsed.state || prev.state,
+        pincode:
+          parsed.pincode && parsed.pincode !== "000000"
+            ? parsed.pincode
+            : prev.pincode,
+        positions_open: parsed.positions_open || prev.positions_open,
+        skills: parsed.skills || prev.skills,
+        job_description: parsed.job_description || prev.job_description,
+        experience: parsed.experience || prev.experience,
+        salary: parsed.salary || prev.salary,
+        qualification: parsed.qualification || prev.qualification,
+        benefits: parsed.benefits || prev.benefits,
+      }));
+
+      setJdParseMessageType("success");
+      setJdParseMessage(
+        "JD parsed successfully! Fields have been auto-filled. Review and adjust before submitting.",
+      );
+    } catch (error) {
+      if (error instanceof TypeError) {
+        setJdParseMessageType("error");
+        setJdParseMessage(BACKEND_CONNECTION_ERROR);
+        return;
+      }
+      setJdParseMessageType("error");
+      setJdParseMessage(error.message || "Failed to parse JD file.");
+    } finally {
+      setIsParsingJD(false);
+    }
+  };
+
   const handleCreateJobRecruiterSelectionChange = (recruiterIds) => {
     setJobData((prev) => ({ ...prev, recruiterIds }));
   };
@@ -284,14 +402,16 @@ export default function RecruiterLogin() {
         body: JSON.stringify({
           ...jobData,
           recruiter_rid: recruiter.rid,
-          recruiterIds: jobData.access_mode === "restricted" ? jobData.recruiterIds : [],
-          accessNotes: jobData.access_mode === "restricted" ? jobData.accessNotes : "",
+          recruiterIds:
+            jobData.access_mode === "restricted" ? jobData.recruiterIds : [],
+          accessNotes:
+            jobData.access_mode === "restricted" ? jobData.accessNotes : "",
         }),
       });
 
       const data = await readJsonResponse(
         response,
-        "Check VITE_API_BASE_URL and backend route setup."
+        "Check VITE_API_BASE_URL and backend route setup.",
       );
 
       if (!response.ok) {
@@ -302,7 +422,7 @@ export default function RecruiterLogin() {
       setJobMessage(
         data?.warning
           ? `Job created (JID: ${data.job.jid}). ${data.warning}`
-          : `Job created successfully. Generated JID: ${data.job.jid}`
+          : `Job created successfully. Generated JID: ${data.job.jid}`,
       );
       setJobData({
         city: "",
@@ -363,9 +483,17 @@ export default function RecruiterLogin() {
             <p>
               Logged in as <strong>{recruiter.name}</strong>.
             </p>
-            <button type="button" className="admin-back-btn" onClick={handleLogout}>
+            <button
+              type="button"
+              className="admin-back-btn"
+              onClick={handleLogout}
+            >
               Logout
             </button>
+
+            <ReimbursementButton
+              visible={canUploadResumes || canManageJobAccess}
+            />
 
             {canUploadResumes ? (
               <RecruiterDashboard recruiterId={recruiter.rid} />
@@ -457,7 +585,9 @@ export default function RecruiterLogin() {
                             {item.job?.roleName} ({item.job?.companyName})
                           </td>
                           <td>
-                            {item.atsScore === null ? "N/A" : `${item.atsScore}%`}
+                            {item.atsScore === null
+                              ? "N/A"
+                              : `${item.atsScore}%`}
                           </td>
                           <td>
                             {item.atsMatchPercentage === null
@@ -506,16 +636,26 @@ export default function RecruiterLogin() {
                             <td>{item.resId}</td>
                             <td>{item.jobJid ?? "N/A"}</td>
                             <td>{item.resumeFilename}</td>
-                            <td>{String(item.resumeType || "").toUpperCase()}</td>
                             <td>
-                              {item.atsScore === null || item.atsScore === undefined
+                              {String(item.resumeType || "").toUpperCase()}
+                            </td>
+                            <td>
+                              {item.atsScore === null ||
+                              item.atsScore === undefined
                                 ? "N/A"
                                 : `${item.atsScore}%`}
                             </td>
-                            <td className="table-cell-wrap">{item.submittedReason || "-"}</td>
-                            <td className="table-cell-wrap">{item.verifiedReason || "-"}</td>
+                            <td className="table-cell-wrap">
+                              {item.submittedReason || "-"}
+                            </td>
+                            <td className="table-cell-wrap">
+                              {item.verifiedReason || "-"}
+                            </td>
                             <td>
-                              {String(item.workflowStatus || "pending").replace(/_/g, " ")}
+                              {String(item.workflowStatus || "pending").replace(
+                                /_/g,
+                                " ",
+                              )}
                             </td>
                             <td>{formatDateTime(item.uploadedAt)}</td>
                             <td>
@@ -530,7 +670,7 @@ export default function RecruiterLogin() {
                                   window.open(
                                     `${API_BASE_URL}/api/recruiters/${recruiter.rid}/resumes/${item.resId}/file?token=${encodeURIComponent(token)}`,
                                     "_blank",
-                                    "noopener,noreferrer"
+                                    "noopener,noreferrer",
                                   );
                                 }}
                               >
@@ -548,6 +688,64 @@ export default function RecruiterLogin() {
             {canCreateJobs ? (
               <form onSubmit={handleJobSubmit} className="job-form">
                 <h2 className="add-job-title">create job alert</h2>
+
+                <div className="jd-upload-section">
+                  <h3 className="jd-upload-heading">
+                    Auto-fill from Job Description
+                  </h3>
+                  <p className="jd-upload-hint">
+                    Upload a JD file (PDF, DOCX, or TXT) and AI will extract job
+                    details automatically.
+                  </p>
+                  <div className="jd-upload-row">
+                    <label htmlFor="jdFileUpload" className="jd-file-label">
+                      {jdFile ? jdFile.name : "Choose JD file..."}
+                      <input
+                        id="jdFileUpload"
+                        type="file"
+                        accept=".pdf,.docx,.txt"
+                        onChange={handleJDFileChange}
+                        className="jd-file-input"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="click-here-btn jd-parse-btn"
+                      onClick={handleJDUploadAndParse}
+                      disabled={!jdFile || isParsingJD}
+                    >
+                      {isParsingJD ? "Parsing..." : "Parse & Auto-fill"}
+                    </button>
+                    {jdFile ? (
+                      <button
+                        type="button"
+                        className="jd-clear-btn"
+                        onClick={() => {
+                          setJdFile(null);
+                          setJdParseMessage("");
+                          setJdParseMessageType("");
+                          const fileInput =
+                            document.getElementById("jdFileUpload");
+                          if (fileInput) fileInput.value = "";
+                        }}
+                        aria-label="Clear selected file"
+                      >
+                        ✕
+                      </button>
+                    ) : null}
+                  </div>
+                  {jdParseMessage ? (
+                    <p
+                      className={`job-message ${
+                        jdParseMessageType === "success"
+                          ? "job-message-success"
+                          : "job-message-error"
+                      }`}
+                    >
+                      {jdParseMessage}
+                    </p>
+                  ) : null}
+                </div>
                 <div className="job-form-grid">
                   <div className="job-field">
                     <label htmlFor="company_name">Company Name *</label>
@@ -572,7 +770,9 @@ export default function RecruiterLogin() {
                   </div>
 
                   <div className="job-field">
-                    <label htmlFor="positions_open">Number of Positions Open *</label>
+                    <label htmlFor="positions_open">
+                      Number of Positions Open *
+                    </label>
                     <input
                       id="positions_open"
                       name="positions_open"
@@ -599,7 +799,9 @@ export default function RecruiterLogin() {
                   </div>
 
                   <div className="job-field">
-                    <label htmlFor="points_per_joining">Points Per Joining *</label>
+                    <label htmlFor="points_per_joining">
+                      Points Per Joining *
+                    </label>
                     <input
                       id="points_per_joining"
                       name="points_per_joining"
@@ -622,7 +824,9 @@ export default function RecruiterLogin() {
                         onChange={handleJobInputChange}
                       >
                         <option value="open">Open (All Recruiters)</option>
-                        <option value="restricted">Restricted (Selected Recruiters Only)</option>
+                        <option value="restricted">
+                          Restricted (Selected Recruiters Only)
+                        </option>
                       </select>
                     </div>
                   ) : null}
@@ -634,21 +838,29 @@ export default function RecruiterLogin() {
                     <RecruiterMultiSelect
                       allRecruiters={availableRecruiters}
                       selectedRecruiters={jobData.recruiterIds}
-                      onSelectionChange={handleCreateJobRecruiterSelectionChange}
+                      onSelectionChange={
+                        handleCreateJobRecruiterSelectionChange
+                      }
                     />
-                    <label htmlFor="accessNotes">Assignment Notes (optional)</label>
+                    <label htmlFor="accessNotes">
+                      Assignment Notes (optional)
+                    </label>
                     <textarea
                       id="accessNotes"
                       name="accessNotes"
                       value={jobData.accessNotes}
                       onChange={(event) =>
-                        setJobData((prev) => ({ ...prev, accessNotes: event.target.value }))
+                        setJobData((prev) => ({
+                          ...prev,
+                          accessNotes: event.target.value,
+                        }))
                       }
                       rows={2}
                     />
                     {jobData.recruiterIds.length === 0 ? (
                       <p className="job-message job-message-error">
-                        Restricted jobs without assigned recruiters will not receive submissions.
+                        Restricted jobs without assigned recruiters will not
+                        receive submissions.
                       </p>
                     ) : null}
                   </div>
@@ -671,15 +883,30 @@ export default function RecruiterLogin() {
                   <div className="job-form-grid ui-mt-sm">
                     <div className="job-field">
                       <label htmlFor="city">City</label>
-                      <input id="city" name="city" value={jobData.city} onChange={handleJobInputChange} />
+                      <input
+                        id="city"
+                        name="city"
+                        value={jobData.city}
+                        onChange={handleJobInputChange}
+                      />
                     </div>
                     <div className="job-field">
                       <label htmlFor="state">State</label>
-                      <input id="state" name="state" value={jobData.state} onChange={handleJobInputChange} />
+                      <input
+                        id="state"
+                        name="state"
+                        value={jobData.state}
+                        onChange={handleJobInputChange}
+                      />
                     </div>
                     <div className="job-field">
                       <label htmlFor="pincode">Pincode</label>
-                      <input id="pincode" name="pincode" value={jobData.pincode} onChange={handleJobInputChange} />
+                      <input
+                        id="pincode"
+                        name="pincode"
+                        value={jobData.pincode}
+                        onChange={handleJobInputChange}
+                      />
                     </div>
                     <div className="job-field">
                       <label htmlFor="experience">Experience</label>
@@ -692,7 +919,12 @@ export default function RecruiterLogin() {
                     </div>
                     <div className="job-field">
                       <label htmlFor="salary">Salary</label>
-                      <input id="salary" name="salary" value={jobData.salary} onChange={handleJobInputChange} />
+                      <input
+                        id="salary"
+                        name="salary"
+                        value={jobData.salary}
+                        onChange={handleJobInputChange}
+                      />
                     </div>
                     <div className="job-field">
                       <label htmlFor="qualification">Qualification</label>
@@ -726,14 +958,20 @@ export default function RecruiterLogin() {
                   </div>
                 </details>
 
-                <button type="submit" className="recruiter-login-btn" disabled={isSubmitting}>
+                <button
+                  type="submit"
+                  className="recruiter-login-btn"
+                  disabled={isSubmitting}
+                >
                   {isSubmitting ? "Submitting..." : "Create Job Alert"}
                 </button>
 
                 {jobMessage ? (
                   <p
                     className={`job-message ${
-                      jobMessageType === "success" ? "job-message-success" : "job-message-error"
+                      jobMessageType === "success"
+                        ? "job-message-success"
+                        : "job-message-error"
                     }`}
                   >
                     {jobMessage}
@@ -782,7 +1020,12 @@ export default function RecruiterLogin() {
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
-                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="18"
+                    height="18"
+                    aria-hidden="true"
+                  >
                     <path
                       d="M3 3l18 18"
                       fill="none"
@@ -808,7 +1051,12 @@ export default function RecruiterLogin() {
                     />
                   </svg>
                 ) : (
-                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="18"
+                    height="18"
+                    aria-hidden="true"
+                  >
                     <path
                       d="M2 12s3.6-7.1 10-7.1S22 12 22 12s-3.6 7.1-10 7.1S2 12 2 12z"
                       fill="none"
@@ -830,14 +1078,25 @@ export default function RecruiterLogin() {
               </button>
             </div>
 
-            <button type="submit" className="recruiter-login-btn" disabled={isSubmitting}>
+            <button
+              type="submit"
+              className="recruiter-login-btn"
+              disabled={isSubmitting}
+            >
               {isSubmitting ? "Logging in..." : "Login"}
             </button>
           </form>
         </div>
       </section>
+
+      {recruiter && (
+        <PasswordChangeModal
+          isOpen={showPasswordChangeModal}
+          onClose={() => setShowPasswordChangeModal(false)}
+          recruiterName={recruiter.name}
+          recruiterId={recruiter.rid}
+        />
+      )}
     </main>
   );
 }
-
-

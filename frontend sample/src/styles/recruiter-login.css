@@ -451,6 +451,80 @@
   color: var(--text-primary);
 }
 
+/* JD Upload Section */
+.jd-upload-section {
+  background: #f8f9fb;
+  border: 2px dashed var(--border-color);
+  border-radius: 0.7rem;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.jd-upload-heading {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.jd-upload-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666);
+}
+
+.jd-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.jd-file-label {
+  flex: 1;
+  min-width: 0;
+  padding: 0.7rem 1rem;
+  border: 2px solid var(--border-color);
+  border-radius: 0.7rem;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.92rem;
+  color: var(--text-secondary, #666);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: border-color 0.2s;
+}
+
+.jd-file-label:hover {
+  border-color: var(--primary-red, #e74c3c);
+}
+
+.jd-file-input {
+  display: none;
+}
+
+.jd-parse-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.jd-clear-btn {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: #c62828;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.3rem;
+  line-height: 1;
+}
+
+.jd-clear-btn:hover {
+  background: rgba(198, 40, 40, 0.08);
+}
+
 .job-form {
   display: flex;
   flex-direction: column;
