@@ -102,10 +102,23 @@ export default function AboutUs({ setCurrentPage }) {
             <h2>
               <strong>Radhika mam</strong>
             </h2>
-            <p>Our director</p>
+            <p>Our Director</p>
             <p>
               She leads with clarity, discipline, and deep commitment to people,
               helping HireNext scale teams and relationships with consistency.
+            </p>
+            <p>
+              With extensive experience in recruitment and team development,
+              Radhika mam brings strategic vision and operational excellence to
+              every initiative. Her focus on building long-term partnerships
+              with both candidates and corporate clients has been instrumental
+              in HireNext's growth across multiple sectors.
+            </p>
+            <p>
+              Beyond her role, she is passionate about mentoring emerging talent
+              and fostering an inclusive workplace culture where every team
+              member can thrive and contribute meaningfully to our mission of
+              transforming hiring outcomes.
             </p>
           </div>
         </div>

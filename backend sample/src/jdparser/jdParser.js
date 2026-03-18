@@ -4,7 +4,6 @@ const multer = require("multer");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
-const { v4: uuidv4 } = require("uuid");
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
