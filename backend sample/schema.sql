@@ -184,9 +184,6 @@ ALTER TABLE extra_info
 ALTER TABLE extra_info
   ADD COLUMN IF NOT EXISTS reject_reason TEXT NULL;
 
-ALTER TABLE job_resume_selection
-  MODIFY COLUMN selection_status ENUM('selected', 'rejected', 'on_hold', 'verified', 'walk_in', 'joined', 'dropout', 'pending') NOT NULL DEFAULT 'selected';
-
 ALTER TABLE resumes_data
   ADD COLUMN IF NOT EXISTS submitted_by_role VARCHAR(30) NULL DEFAULT 'recruiter';
 ALTER TABLE resumes_data
@@ -225,6 +222,22 @@ CREATE TABLE IF NOT EXISTS job_resume_selection (
     ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+ALTER TABLE job_resume_selection
+  MODIFY COLUMN selection_status ENUM('selected', 'rejected', 'on_hold', 'verified', 'walk_in', 'joined', 'dropout', 'pending') NOT NULL DEFAULT 'selected';
+
+CREATE TABLE IF NOT EXISTS money_sum (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  company_rev DECIMAL(14,2) NOT NULL DEFAULT 0,
+  expense DECIMAL(14,2) NOT NULL DEFAULT 0,
+  profit DECIMAL(14,2) NOT NULL DEFAULT 0,
+  reason TEXT NULL,
+  entry_type VARCHAR(20) NOT NULL DEFAULT 'expense',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_money_sum_created_at (created_at),
+  INDEX idx_money_sum_entry_type (entry_type)
+);
+
 CREATE TABLE IF NOT EXISTS reimbursements (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   rid VARCHAR(50) NOT NULL,
@@ -242,19 +255,6 @@ CREATE TABLE IF NOT EXISTS reimbursements (
   CONSTRAINT fk_reimbursements_money_sum
     FOREIGN KEY (money_sum_id) REFERENCES money_sum(id)
     ON UPDATE CASCADE ON DELETE SET NULL
-);
-
-CREATE TABLE IF NOT EXISTS money_sum (
-  id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  company_rev DECIMAL(14,2) NOT NULL DEFAULT 0,
-  expense DECIMAL(14,2) NOT NULL DEFAULT 0,
-  profit DECIMAL(14,2) NOT NULL DEFAULT 0,
-  reason TEXT NULL,
-  entry_type VARCHAR(20) NOT NULL DEFAULT 'expense',
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_money_sum_created_at (created_at),
-  INDEX idx_money_sum_entry_type (entry_type)
 );
 
 CREATE TABLE IF NOT EXISTS recruiter_attendance (
@@ -279,8 +279,8 @@ CREATE TABLE IF NOT EXISTS recruiter_attendance (
 );
 
 CREATE TABLE IF NOT EXISTS job_recruiter_access (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  job_jid INT UNSIGNED NOT NULL,
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  job_jid INT NOT NULL,
   recruiter_rid VARCHAR(20) NOT NULL,
   granted_by VARCHAR(20) NOT NULL,
   granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
